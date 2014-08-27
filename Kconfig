@@ -1,0 +1,23 @@
+#
+# Copyright 2014, NICTA
+#
+# This software may be distributed and modified according to the terms of
+# the BSD 2-Clause license. Note that NO WARRANTY is provided.
+# See "LICENSE_BSD2.txt" for details.
+#
+# @TAG(NICTA_BSD)
+#
+
+menuconfig LIB_MUSL_C
+    bool "Build musl C library"
+    default y
+    select HAVE_LIBC
+    select HAVE_CRT
+    help
+        Build Musl C standard library.
+
+config HAVE_LIBC
+    bool
+
+config HAVE_CRT
+    bool
