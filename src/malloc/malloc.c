@@ -60,6 +60,16 @@ static struct {
 
 #define IS_MMAPPED(c) !((c)->csize & (C_INUSE))
 
+#ifndef MASK
+#define MASK(n) (BIT(n)-1ul)
+#endif
+
+#ifndef BIT
+#define BIT(n) (1ul<<(n))
+#endif 
+
+#define LOG_BASE_2_32(n) \
+	((sizeof(uint32_t) * 8) - __builtin_clz((uint32_t) n) - 1)
 
 /* Synchronization tools */
 
@@ -121,14 +131,35 @@ static int bin_index(size_t x)
 	x = x / SIZE_ALIGN - 1;
 	if (x <= 32) return x;
 	if (x > 0x1c00) return 63;
+#if 1
+	/* calculate log2((x^2)^2) where x is the 3 most significant
+	 * bits of x, and avoid using the FPU */
+	/* we know x is < 32 bits as 0x1c00 fits in less than 32 bits */
+	int power = LOG_BASE_2_32(x);
+	int extra = ((x >> power - 2)) & 0x3;
+	return (4 * power) + 12 + extra;
+#else
+	/* this uses floating point and will activate the FPU */
 	return ((union { float v; uint32_t r; }){(int)x}.r>>21) - 496;
+#endif
 }
 
 static int bin_index_up(size_t x)
 {
 	x = x / SIZE_ALIGN - 1;
 	if (x <= 32) return x;
+
+#if 1
+	/* calculate log2((x^2)^2)  where x is the 3 most significant
+	 * bits of x + the least significant bits rounded up, and avoid using the FPU */
+	/* we know x is < 32 bits as 0x1c00 fits in less than 32 bits */
+	int power = LOG_BASE_2_32(x);
+	int extra = (((x + MASK(power - 2))) & 0x3);
+	return (4 * power) + 12 + extra;
+#else
+	/* this will activate the FPU and calculates the same as the above */
 	return ((union { float v; uint32_t r; }){(int)x}.r+0x1fffff>>21) - 496;
+#endif
 }
 
 #if 0
