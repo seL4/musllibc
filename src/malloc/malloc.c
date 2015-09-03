@@ -154,7 +154,11 @@ static int bin_index_up(size_t x)
 	 * bits of x + the least significant bits rounded up, and avoid using the FPU */
 	/* we know x is < 32 bits as 0x1c00 fits in less than 32 bits */
 	int power = LOG_BASE_2_32(x);
-	int extra = (((x + MASK(power - 2))) & 0x3);
+	/* round up x and reclaculate the power in case we rolled over all the
+	 * extra bits */
+	x += MASK(power - 2);
+	power = LOG_BASE_2_32(x);
+	int extra = ((x >> (power - 2))) & 0x3;
 	return (4 * power) + 12 + extra;
 #else
 	/* this will activate the FPU and calculates the same as the above */
