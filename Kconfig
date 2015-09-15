@@ -9,12 +9,12 @@
 #
 
 menuconfig LIB_MUSL_C
-    bool "Build musl C library"
+    bool "libmuslc"
     default y
     select HAVE_LIBC
     select HAVE_CRT
     help
-        Build Musl C standard library.
+        Musl C standard library.
 
 config HAVE_LIBC
     bool
