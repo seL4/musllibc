@@ -1,6 +1,11 @@
 #if defined(_POSIX_SOURCE) || defined(_POSIX_C_SOURCE) \
  || defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE) || defined(_BSD_SOURCE)
 
+#if defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE) || defined(_BSD_SOURCE)
+#define MINSIGSTKSZ 2048
+#define SIGSTKSZ 8192
+#endif
+
 #if defined(_GNU_SOURCE) || defined(_BSD_SOURCE)
 typedef unsigned long long greg_t, gregset_t[32];
 typedef struct {
@@ -23,7 +28,7 @@ struct sigcontext
 typedef struct
 {
 	unsigned regmask, status;
-	unsigned long long pc, regs[32], fpregs[32];
+	unsigned long long pc, gregs[32], fpregs[32];
 	unsigned ownedfp, fpc_csr, fpc_eir, used_math, dsp;
 	unsigned long long mdhi, mdlo;
 	unsigned long hi1, lo1, hi2, lo2, hi3, lo3;

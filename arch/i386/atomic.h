@@ -7,7 +7,7 @@ static inline int a_ctz_64(uint64_t x)
 {
 	int r;
 	__asm__( "bsf %1,%0 ; jnz 1f ; bsf %2,%0 ; addl $32,%0\n1:"
-		: "=r"(r) : "r"((unsigned)x), "r"((unsigned)(x>>32)) );
+		: "=&r"(r) : "r"((unsigned)x), "r"((unsigned)(x>>32)) );
 	return r;
 }
 
@@ -50,16 +50,16 @@ static inline int a_cas(volatile int *p, int t, int s)
 	return t;
 }
 
-static inline void a_or(volatile void *p, int v)
+static inline void a_or(volatile int *p, int v)
 {
 	__asm__( "lock ; orl %1, %0"
-		: "=m"(*(int *)p) : "r"(v) : "memory" );
+		: "=m"(*p) : "r"(v) : "memory" );
 }
 
-static inline void a_and(volatile void *p, int v)
+static inline void a_and(volatile int *p, int v)
 {
 	__asm__( "lock ; andl %1, %0"
-		: "=m"(*(int *)p) : "r"(v) : "memory" );
+		: "=m"(*p) : "r"(v) : "memory" );
 }
 
 static inline int a_swap(volatile int *x, int v)
@@ -88,12 +88,17 @@ static inline void a_dec(volatile int *x)
 
 static inline void a_store(volatile int *p, int x)
 {
-	__asm__( "movl %1, %0" : "=m"(*p) : "r"(x) : "memory" );
+	__asm__( "movl %1, %0 ; lock ; orl $0,(%%esp)" : "=m"(*p) : "r"(x) : "memory" );
 }
 
 static inline void a_spin()
 {
 	__asm__ __volatile__( "pause" : : : "memory" );
+}
+
+static inline void a_barrier()
+{
+	__asm__ __volatile__( "" : : : "memory" );
 }
 
 static inline void a_crash()

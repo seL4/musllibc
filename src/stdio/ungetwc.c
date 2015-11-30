@@ -1,4 +1,5 @@
 #include "stdio_impl.h"
+#include "locale_impl.h"
 #include <wchar.h>
 #include <limits.h>
 #include <ctype.h>
@@ -8,20 +9,19 @@ wint_t ungetwc(wint_t c, FILE *f)
 {
 	unsigned char mbc[MB_LEN_MAX];
 	int l=1;
-
-	if (c == WEOF) return c;
-
-	/* Try conversion early so we can fail without locking if invalid */
-	if (!isascii(c) && (l = wctomb((void *)mbc, c)) < 0)
-		return WEOF;
+	locale_t *ploc = &CURRENT_LOCALE, loc = *ploc;
 
 	FLOCK(f);
 
-	f->mode |= f->mode+1;
+	if (f->mode <= 0) fwide(f, 1);
+	*ploc = f->locale;
 
-	if ((!f->rend && __toread(f)) || f->rpos < f->buf - UNGET + l) {
+	if (!f->rpos) __toread(f);
+	if (!f->rpos || f->rpos < f->buf - UNGET + l || c == WEOF ||
+	    (!isascii(c) && (l = wctomb((void *)mbc, c)) < 0)) {
 		FUNLOCK(f);
-		return EOF;
+		*ploc = loc;
+		return WEOF;
 	}
 
 	if (isascii(c)) *--f->rpos = c;
@@ -30,5 +30,6 @@ wint_t ungetwc(wint_t c, FILE *f)
 	f->flags &= ~F_EOF;
 
 	FUNLOCK(f);
+	*ploc = loc;
 	return c;
 }

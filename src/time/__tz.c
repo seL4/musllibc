@@ -27,7 +27,7 @@ static char old_tz_buf[32];
 static char *old_tz = old_tz_buf;
 static size_t old_tz_size = sizeof old_tz_buf;
 
-static int lock[2];
+static volatile int lock[2];
 
 static int getint(const char **p)
 {
@@ -36,19 +36,16 @@ static int getint(const char **p)
 	return x;
 }
 
-static int getsigned(const char **p)
-{
-	if (**p == '-') {
-		++*p;
-		return -getint(p);
-	}
-	if (**p == '+') ++*p;
-	return getint(p);
-}
-
 static int getoff(const char **p)
 {
-	int off = 3600*getsigned(p);
+	int neg = 0;
+	if (**p == '-') {
+		++*p;
+		neg = 1;
+	} else if (**p == '+') {
+		++*p;
+	}
+	int off = 3600*getint(p);
 	if (**p == ':') {
 		++*p;
 		off += 60*getint(p);
@@ -57,7 +54,7 @@ static int getoff(const char **p)
 			off += getint(p);
 		}
 	}
-	return off;
+	return neg ? -off : off;
 }
 
 static void getrule(const char **p, int rule[5])
@@ -128,7 +125,8 @@ static void do_tzset()
 		"/usr/share/zoneinfo/\0/share/zoneinfo/\0/etc/zoneinfo/\0";
 
 	s = getenv("TZ");
-	if (!s || !*s) s = "/etc/localtime";
+	if (!s) s = "/etc/localtime";
+	if (!*s) s = __gmt;
 
 	if (old_tz && !strcmp(s, old_tz)) return;
 
@@ -356,9 +354,9 @@ void __secs_to_zone(long long t, int local, int *isdst, long *offset, long *oppo
 		size_t alt, i = scan_trans(t, local, &alt);
 		if (i != -1) {
 			*isdst = types[6*i+4];
-			*offset = -(int32_t)zi_read32(types+6*i);
+			*offset = (int32_t)zi_read32(types+6*i);
 			*zonename = (const char *)abbrevs + types[6*i+5];
-			if (oppoff) *oppoff = -(int32_t)zi_read32(types+6*alt);
+			if (oppoff) *oppoff = (int32_t)zi_read32(types+6*alt);
 			UNLOCK(lock);
 			return;
 		}
@@ -392,15 +390,15 @@ void __secs_to_zone(long long t, int local, int *isdst, long *offset, long *oppo
 	}
 std:
 	*isdst = 0;
-	*offset = __timezone;
-	if (oppoff) *oppoff = dst_off;
+	*offset = -__timezone;
+	if (oppoff) *oppoff = -dst_off;
 	*zonename = __tzname[0];
 	UNLOCK(lock);
 	return;
 dst:
 	*isdst = 1;
-	*offset = dst_off;
-	if (oppoff) *oppoff = __timezone;
+	*offset = -dst_off;
+	if (oppoff) *oppoff = -__timezone;
 	*zonename = __tzname[1];
 	UNLOCK(lock);
 }

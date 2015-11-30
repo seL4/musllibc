@@ -4,6 +4,7 @@
 #include "libc.h"
 #include <sys/mman.h>
 #include <string.h>
+#include <stddef.h>
 
 void *__mmap(void *, size_t, int, int, int, off_t);
 int __munmap(void *, size_t);
@@ -15,14 +16,16 @@ static void dummy_0()
 weak_alias(dummy_0, __acquire_ptc);
 weak_alias(dummy_0, __release_ptc);
 weak_alias(dummy_0, __pthread_tsd_run_dtors);
-weak_alias(dummy_0, __do_private_robust_list);
 weak_alias(dummy_0, __do_orphaned_stdio_locks);
+weak_alias(dummy_0, __dl_thread_cleanup);
 
 _Noreturn void __pthread_exit(void *result)
 {
 	pthread_t self = __pthread_self();
 	sigset_t set;
 
+	self->canceldisable = 1;
+	self->cancelasync = 0;
 	self->result = result;
 
 	while (self->cancelbuf) {
@@ -64,14 +67,27 @@ _Noreturn void __pthread_exit(void *result)
 		exit(0);
 	}
 
-	if (self->locale != &libc.global_locale) {
-		a_dec(&libc.uselocale_cnt);
-		if (self->locale->ctype_utf8)
-			a_dec(&libc.bytelocale_cnt_minus_1);
+	/* Process robust list in userspace to handle non-pshared mutexes
+	 * and the detached thread case where the robust list head will
+	 * be invalid when the kernel would process it. */
+	__vm_lock();
+	volatile void *volatile *rp;
+	while ((rp=self->robust_list.head) && rp != &self->robust_list.head) {
+		pthread_mutex_t *m = (void *)((char *)rp
+			- offsetof(pthread_mutex_t, _m_next));
+		int waiters = m->_m_waiters;
+		int priv = (m->_m_type & 128) ^ 128;
+		self->robust_list.pending = rp;
+		self->robust_list.head = *rp;
+		int cont = a_swap(&m->_m_lock, self->tid|0x40000000);
+		self->robust_list.pending = 0;
+		if (cont < 0 || waiters)
+			__wake(&m->_m_lock, 1, priv);
 	}
+	__vm_unlock();
 
-	__do_private_robust_list();
 	__do_orphaned_stdio_locks();
+	__dl_thread_cleanup();
 
 	if (self->detached && self->map_base) {
 		/* Detached threads must avoid the kernel clear_child_tid
@@ -83,6 +99,15 @@ _Noreturn void __pthread_exit(void *result)
 		 * detached later (== 2), we need to clear it here. */
 		if (self->detached == 2) __syscall(SYS_set_tid_address, 0);
 
+		/* Robust list will no longer be valid, and was already
+		 * processed above, so unregister it with the kernel. */
+		if (self->robust_list.off)
+			__syscall(SYS_set_robust_list, 0, 3*sizeof(long));
+
+		/* Since __unmapself bypasses the normal munmap code path,
+		 * explicitly wait for vmlock holders first. */
+		__vm_wait();
+
 		/* The following call unmaps the thread's stack mapping
 		 * and then exits without touching the stack. */
 		__unmapself(self->map_base, self->map_size);
@@ -93,7 +118,6 @@ _Noreturn void __pthread_exit(void *result)
 
 void __do_cleanup_push(struct __ptcb *cb)
 {
-	if (!libc.has_thread_pointer) return;
 	struct pthread *self = __pthread_self();
 	cb->__next = self->cancelbuf;
 	self->cancelbuf = cb;
@@ -101,7 +125,6 @@ void __do_cleanup_push(struct __ptcb *cb)
 
 void __do_cleanup_pop(struct __ptcb *cb)
 {
-	if (!libc.has_thread_pointer) return;
 	__pthread_self()->cancelbuf = cb->__next;
 }
 
@@ -139,6 +162,8 @@ weak_alias(dummy, __pthread_tsd_size);
 static void *dummy_tsd[1] = { 0 };
 weak_alias(dummy_tsd, __pthread_tsd_main);
 
+volatile int __block_new_threads = 0;
+
 static FILE *volatile dummy_file = 0;
 weak_alias(dummy_file, __stdin_used);
 weak_alias(dummy_file, __stdout_used);
@@ -166,8 +191,9 @@ int __pthread_create(pthread_t *restrict res, const pthread_attr_t *restrict att
 	if (!libc.can_do_threads) return ENOSYS;
 	self = __pthread_self();
 	if (!libc.threaded) {
-		for (FILE *f=libc.ofl_head; f; f=f->next)
+		for (FILE *f=*__ofl_lock(); f; f=f->next)
 			init_file_lock(f);
+		__ofl_unlock();
 		init_file_lock(__stdin_used);
 		init_file_lock(__stdout_used);
 		init_file_lock(__stderr_used);
@@ -178,6 +204,7 @@ int __pthread_create(pthread_t *restrict res, const pthread_attr_t *restrict att
 	if (attrp && !c11) attr = *attrp;
 
 	__acquire_ptc();
+	if (__block_new_threads) __wait(&__block_new_threads, 0, 1, 1);
 
 	if (attr._a_stackaddr) {
 		size_t need = libc.tls_size + __pthread_tsd_size;
@@ -205,7 +232,8 @@ int __pthread_create(pthread_t *restrict res, const pthread_attr_t *restrict att
 		if (guard) {
 			map = __mmap(0, size, PROT_NONE, MAP_PRIVATE|MAP_ANON, -1, 0);
 			if (map == MAP_FAILED) goto fail;
-			if (__mprotect(map+guard, size-guard, PROT_READ|PROT_WRITE)) {
+			if (__mprotect(map+guard, size-guard, PROT_READ|PROT_WRITE)
+			    && errno != ENOSYS) {
 				__munmap(map, size);
 				goto fail;
 			}
@@ -238,8 +266,9 @@ int __pthread_create(pthread_t *restrict res, const pthread_attr_t *restrict att
 		do_sched = new->startlock[0] = 1;
 		__block_app_sigs(new->sigmask);
 	}
+	new->robust_list.head = &new->robust_list.head;
 	new->unblock_cancel = self->cancel;
-	new->canary = self->canary;
+	new->CANARY = self->CANARY;
 
 	a_inc(&libc.threads_minus_1);
 	ret = __clone((c11 ? start_c11 : start), stack, flags, new, &new->tid, TP_ADJ(new), &new->tid);

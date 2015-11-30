@@ -1,4 +1,5 @@
 .global __syscall
+.hidden __syscall
 .type   __syscall, @function
 __syscall:
 	! The kernel syscall entry point documents that the trap number indicates
@@ -12,7 +13,7 @@ __syscall:
 	mov.l @r15, r7
 	mov.l @(4,r15), r0
 	mov.l @(8,r15), r1
-	trapa #22
+	trapa #31
 	or r0, r0
 	or r0, r0
 	or r0, r0

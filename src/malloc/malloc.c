@@ -13,7 +13,6 @@
 #define inline inline __attribute__((always_inline))
 #endif
 
-uintptr_t __brk(uintptr_t);
 void *__mmap(void *, size_t, int, int, int, off_t);
 int __munmap(void *, size_t);
 void *__mremap(void *, size_t, size_t, int, ...);
@@ -25,19 +24,15 @@ struct chunk {
 };
 
 struct bin {
-	int lock[2];
+	volatile int lock[2];
 	struct chunk *head;
 	struct chunk *tail;
 };
 
 static struct {
-	uintptr_t brk;
-	size_t *heap;
-	uint64_t binmap;
+	volatile uint64_t binmap;
 	struct bin bins[64];
-	int brk_lock[2];
-	int free_lock[2];
-	unsigned mmap_step;
+	volatile int free_lock[2];
 } mal;
 
 
@@ -187,93 +182,52 @@ void __dump_heap(int x)
 }
 #endif
 
+void *__expand_heap(size_t *);
+
 static struct chunk *expand_heap(size_t n)
 {
+	static int heap_lock[2];
+	static void *end;
+	void *p;
 	struct chunk *w;
-	uintptr_t new;
 
-	lock(mal.brk_lock);
+	/* The argument n already accounts for the caller's chunk
+	 * overhead needs, but if the heap can't be extended in-place,
+	 * we need room for an extra zero-sized sentinel chunk. */
+	n += SIZE_ALIGN;
 
-	if (n > SIZE_MAX - mal.brk - 2*PAGE_SIZE) goto fail;
-	new = mal.brk + n + SIZE_ALIGN + PAGE_SIZE - 1 & -PAGE_SIZE;
-	n = new - mal.brk;
+	lock(heap_lock);
 
-	if (__brk(new) != new) {
-		size_t min = (size_t)PAGE_SIZE << mal.mmap_step/2;
-		n += -n & PAGE_SIZE-1;
-		if (n < min) n = min;
-		void *area = __mmap(0, n, PROT_READ|PROT_WRITE,
-			MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-		if (area == MAP_FAILED) goto fail;
-
-		mal.mmap_step++;
-		area = (char *)area + SIZE_ALIGN - OVERHEAD;
-		w = area;
-		n -= SIZE_ALIGN;
-		w->psize = 0 | C_INUSE;
-		w->csize = n | C_INUSE;
-		w = NEXT_CHUNK(w);
-		w->psize = n | C_INUSE;
-		w->csize = 0 | C_INUSE;
-
-		unlock(mal.brk_lock);
-
-		return area;
-	}
-
-	w = MEM_TO_CHUNK(new);
-	w->psize = n | C_INUSE;
-	w->csize = 0 | C_INUSE;
-
-	w = MEM_TO_CHUNK(mal.brk);
-	w->csize = n | C_INUSE;
-	mal.brk = new;
-	
-	unlock(mal.brk_lock);
-
-	return w;
-fail:
-	unlock(mal.brk_lock);
-	errno = ENOMEM;
-	return 0;
-}
-
-static int init_malloc(size_t n)
-{
-	static int init, waiters;
-	int state;
-	struct chunk *c;
-
-	if (init == 2) return 0;
-
-	while ((state=a_swap(&init, 1)) == 1)
-		__wait(&init, &waiters, 1, 1);
-	if (state) {
-		a_store(&init, 2);
+	p = __expand_heap(&n);
+	if (!p) {
+		unlock(heap_lock);
 		return 0;
 	}
 
-	mal.brk = __brk(0);
-#ifdef SHARED
-	mal.brk = mal.brk + PAGE_SIZE-1 & -PAGE_SIZE;
-#endif
-	mal.brk = mal.brk + 2*SIZE_ALIGN-1 & -SIZE_ALIGN;
-
-	c = expand_heap(n);
-
-	if (!c) {
-		a_store(&init, 0);
-		if (waiters) __wake(&init, 1, 1);
-		return -1;
+	/* If not just expanding existing space, we need to make a
+	 * new sentinel chunk below the allocated space. */
+	if (p != end) {
+		/* Valid/safe because of the prologue increment. */
+		n -= SIZE_ALIGN;
+		p = (char *)p + SIZE_ALIGN;
+		w = MEM_TO_CHUNK(p);
+		w->psize = 0 | C_INUSE;
 	}
 
-	mal.heap = (void *)c;
-	c->psize = 0 | C_INUSE;
-	free(CHUNK_TO_MEM(c));
+	/* Record new heap end and fill in footer. */
+	end = (char *)p + n;
+	w = MEM_TO_CHUNK(end);
+	w->psize = n | C_INUSE;
+	w->csize = 0 | C_INUSE;
 
-	a_store(&init, 2);
-	if (waiters) __wake(&init, -1, 1);
-	return 1;
+	/* Fill in header, which may be new or may be replacing a
+	 * zero-size sentinel header at the old end-of-heap. */
+	w = MEM_TO_CHUNK(p);
+	w->csize = n | C_INUSE;
+
+	unlock(heap_lock);
+
+	return w;
 }
 
 static int adjust_size(size_t *n)
@@ -410,7 +364,6 @@ void *malloc(size_t n)
 	for (;;) {
 		uint64_t mask = mal.binmap & -(1ULL<<i);
 		if (!mask) {
-			if (init_malloc(n) > 0) continue;
 			c = expand_heap(n);
 			if (!c) return 0;
 			if (alloc_rev(c)) {
@@ -424,7 +377,7 @@ void *malloc(size_t n)
 		j = first_set(mask);
 		lock_bin(j);
 		c = mal.bins[j].head;
-		if (c != BIN_TO_CHUNK(j) && j == bin_index(c->csize)) {
+		if (c != BIN_TO_CHUNK(j)) {
 			if (!pretrim(c, n, i, j)) unbin(c, j);
 			unlock_bin(j);
 			break;
@@ -436,6 +389,17 @@ void *malloc(size_t n)
 	trim(c, n);
 
 	return CHUNK_TO_MEM(c);
+}
+
+void *__malloc0(size_t n)
+{
+	void *p = malloc(n);
+	if (p && !IS_MMAPPED(MEM_TO_CHUNK(p))) {
+		size_t *z;
+		n = (n + sizeof *z - 1)/sizeof *z;
+		for (z=p; n; n--, z++) if (*z) *z=0;
+	}
+	return p;
 }
 
 void *realloc(void *p, size_t n)
@@ -535,18 +499,6 @@ void free(void *p)
 	if (next->psize != self->csize) a_crash();
 
 	for (;;) {
-		/* Replace middle of large chunks with fresh zero pages */
-		if (reclaim && (self->psize & next->csize & C_INUSE)) {
-			uintptr_t a = (uintptr_t)self + SIZE_ALIGN+PAGE_SIZE-1 & -PAGE_SIZE;
-			uintptr_t b = (uintptr_t)next - SIZE_ALIGN & -PAGE_SIZE;
-#if 1
-			__madvise((void *)a, b-a, MADV_DONTNEED);
-#else
-			__mmap((void *)a, b-a, PROT_READ|PROT_WRITE,
-				MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED, -1, 0);
-#endif
-		}
-
 		if (self->psize & next->csize & C_INUSE) {
 			self->csize = final_size | C_INUSE;
 			next->psize = final_size | C_INUSE;
@@ -576,6 +528,9 @@ void free(void *p)
 		}
 	}
 
+	if (!(mal.binmap & 1ULL<<i))
+		a_or_64(&mal.binmap, 1ULL<<i);
+
 	self->csize = final_size;
 	next->psize = final_size;
 	unlock(mal.free_lock);
@@ -585,8 +540,17 @@ void free(void *p)
 	self->next->prev = self;
 	self->prev->next = self;
 
-	if (!(mal.binmap & 1ULL<<i))
-		a_or_64(&mal.binmap, 1ULL<<i);
+	/* Replace middle of large chunks with fresh zero pages */
+	if (reclaim) {
+		uintptr_t a = (uintptr_t)self + SIZE_ALIGN+PAGE_SIZE-1 & -PAGE_SIZE;
+		uintptr_t b = (uintptr_t)next - SIZE_ALIGN & -PAGE_SIZE;
+#if 1
+		__madvise((void *)a, b-a, MADV_DONTNEED);
+#else
+		__mmap((void *)a, b-a, PROT_READ|PROT_WRITE,
+			MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED, -1, 0);
+#endif
+	}
 
 	unlock_bin(i);
 }

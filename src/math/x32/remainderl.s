@@ -4,8 +4,8 @@ remainderl:
 	fldt 24(%esp)
 	fldt 8(%esp)
 1:	fprem1
-	fstsw %ax
-	sahf
-	jp 1b
+	fnstsw %ax
+	testb $4,%ah
+	jnz 1b
 	fstp %st(1)
 	ret

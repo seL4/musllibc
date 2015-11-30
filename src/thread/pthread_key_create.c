@@ -3,7 +3,7 @@
 volatile size_t __pthread_tsd_size = sizeof(void *) * PTHREAD_KEYS_MAX;
 void *__pthread_tsd_main[PTHREAD_KEYS_MAX] = { 0 };
 
-static void (*keys[PTHREAD_KEYS_MAX])(void *);
+static void (*volatile keys[PTHREAD_KEYS_MAX])(void *);
 
 static void nodtor(void *dummy)
 {
@@ -13,13 +13,11 @@ int __pthread_key_create(pthread_key_t *k, void (*dtor)(void *))
 {
 	unsigned i = (uintptr_t)&k / 16 % PTHREAD_KEYS_MAX;
 	unsigned j = i;
+	pthread_t self = __pthread_self();
 
-	if (libc.has_thread_pointer) {
-		pthread_t self = __pthread_self();
-		/* This can only happen in the main thread before
-		 * pthread_create has been called. */
-		if (!self->tsd) self->tsd = __pthread_tsd_main;
-	}
+	/* This can only happen in the main thread before
+	 * pthread_create has been called. */
+	if (!self->tsd) self->tsd = __pthread_tsd_main;
 
 	if (!dtor) dtor = nodtor;
 	do {

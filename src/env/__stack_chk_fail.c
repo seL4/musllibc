@@ -9,11 +9,24 @@ void __init_ssp(void *entropy)
 	if (entropy) memcpy(&__stack_chk_guard, entropy, sizeof(uintptr_t));
 	else __stack_chk_guard = (uintptr_t)&__stack_chk_guard * 1103515245;
 
-	if (libc.has_thread_pointer)
-		__pthread_self()->canary = __stack_chk_guard;
+	__pthread_self()->CANARY = __stack_chk_guard;
 }
 
 void __stack_chk_fail(void)
 {
 	a_crash();
 }
+
+#ifdef SHARED
+
+__attribute__((__visibility__("hidden")))
+void __stack_chk_fail_local(void)
+{
+	a_crash();
+}
+
+#else
+
+weak_alias(__stack_chk_fail, __stack_chk_fail_local);
+
+#endif

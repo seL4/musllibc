@@ -149,7 +149,7 @@ static void pop_arg(union arg *arg, int type, va_list *ap)
 
 static void out(FILE *f, const wchar_t *s, size_t l)
 {
-	while (l--) fputwc(*s++, f);
+	while (l-- && !(f->flags & F_ERR)) fputwc(*s++, f);
 }
 
 static int getint(wchar_t **s) {
@@ -293,7 +293,10 @@ static int wprintf_core(FILE *f, const wchar_t *fmt, va_list *ap, union arg *nl_
 			if ((fl&LEFT_ADJ)) fprintf(f, "%.*s", w-p, "");
 			l=w;
 			continue;
+		case 'm':
+			arg.p = strerror(errno);
 		case 's':
+			if (!arg.p) arg.p = "(null)";
 			bs = arg.p;
 			if (p<0) p = INT_MAX;
 			for (i=l=0; l<p && (i=mbtowc(&wc, bs, MB_LEN_MAX))>0; bs+=i, l++);
@@ -345,6 +348,7 @@ int vfwprintf(FILE *restrict f, const wchar_t *restrict fmt, va_list ap)
 	va_list ap2;
 	int nl_type[NL_ARGMAX] = {0};
 	union arg nl_arg[NL_ARGMAX];
+	int olderr;
 	int ret;
 
 	/* the copy allows passing va_list* even if va_list is an array */
@@ -355,8 +359,12 @@ int vfwprintf(FILE *restrict f, const wchar_t *restrict fmt, va_list ap)
 	}
 
 	FLOCK(f);
-	f->mode |= f->mode+1;
+	fwide(f, 1);
+	olderr = f->flags & F_ERR;
+	f->flags &= ~F_ERR;
 	ret = wprintf_core(f, fmt, &ap2, nl_arg, nl_type);
+	if (f->flags & F_ERR) ret = -1;
+	f->flags |= olderr;
 	FUNLOCK(f);
 	va_end(ap2);
 	return ret;

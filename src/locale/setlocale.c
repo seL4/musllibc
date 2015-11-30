@@ -5,19 +5,27 @@
 #include "libc.h"
 #include "atomic.h"
 
-static char buf[2+4*(LOCALE_NAME_MAX+1)];
+static char buf[LC_ALL*(LOCALE_NAME_MAX+1)];
+
+static char *setlocale_one_unlocked(int cat, const char *name)
+{
+	const struct __locale_map *lm;
+
+	if (name) libc.global_locale.cat[cat] = lm = __get_locale(cat, name);
+	else lm = libc.global_locale.cat[cat];
+
+	return lm ? (char *)lm->name : "C";
+}
+
+char *__strchrnul(const char *, int);
 
 char *setlocale(int cat, const char *name)
 {
-	struct __locale_map *lm;
-	int i, j;
-
-	if (!libc.global_locale.messages_name) {
-		libc.global_locale.messages_name =
-			buf + 2 + 3*(LOCALE_NAME_MAX+1);
-	}
+	static volatile int lock[2];
 
 	if ((unsigned)cat > LC_ALL) return 0;
+
+	LOCK(lock);
 
 	/* For LC_ALL, setlocale is required to return a string which
 	 * encodes the current setting for all categories. The format of
@@ -25,53 +33,38 @@ char *setlocale(int cat, const char *name)
 	 * performs both the serialization and deserialization, depends
 	 * on the format, so it can easily be changed if needed. */
 	if (cat == LC_ALL) {
+		int i;
 		if (name) {
-			char part[LOCALE_NAME_MAX+1];
-			if (name[0] && name[1]==';'
-			    && strlen(name) > 2 + 3*(LOCALE_NAME_MAX+1)) {
-				part[0] = name[0];
-				part[1] = 0;
-				setlocale(LC_CTYPE, part);
-				part[LOCALE_NAME_MAX] = 0;
-				for (i=LC_TIME; i<LC_MESSAGES; i++) {
-					memcpy(part, name + 2 + (i-2)*(LOCALE_NAME_MAX+1), LOCALE_NAME_MAX);
-					for (j=LOCALE_NAME_MAX-1; j && part[j]==';'; j--)
-						part[j] = 0;
-					setlocale(i, part);
+			char part[LOCALE_NAME_MAX+1] = "C.UTF-8";
+			const char *p = name;
+			for (i=0; i<LC_ALL; i++) {
+				const char *z = __strchrnul(p, ';');
+				if (z-p <= LOCALE_NAME_MAX) {
+					memcpy(part, p, z-p);
+					part[z-p] = 0;
+					if (*z) p = z+1;
 				}
-				setlocale(LC_MESSAGES, name + 2 + 3*(LOCALE_NAME_MAX+1));
-			} else {
-				for (i=0; i<LC_ALL; i++)
-					setlocale(i, name);
+				setlocale_one_unlocked(i, part);
 			}
 		}
-		memset(buf, ';', 2 + 3*(LOCALE_NAME_MAX+1));
-		buf[0] = libc.global_locale.ctype_utf8 ? 'U' : 'C';
-		for (i=LC_TIME; i<LC_MESSAGES; i++) {
-			lm = libc.global_locale.cat[i-2];
-			if (lm) memcpy(buf + 2 + (i-2)*(LOCALE_NAME_MAX+1),
-				lm->name, strlen(lm->name));
+		char *s = buf;
+		for (i=0; i<LC_ALL; i++) {
+			const struct __locale_map *lm =
+				libc.global_locale.cat[i];
+			const char *part = lm ? lm->name : "C";
+			size_t l = strlen(part);
+			memcpy(s, part, l);
+			s[l] = ';';
+			s += l+1;
 		}
+		*--s = 0;
+		UNLOCK(lock);
 		return buf;
 	}
 
-	if (name) {
-		int adj = libc.global_locale.ctype_utf8;
-		__setlocalecat(&libc.global_locale, cat, name);
-		adj -= libc.global_locale.ctype_utf8;
-		if (adj) a_fetch_add(&libc.bytelocale_cnt_minus_1, adj);
-	}
+	char *ret = setlocale_one_unlocked(cat, name);
 
-	switch (cat) {
-	case LC_CTYPE:
-		return libc.global_locale.ctype_utf8 ? "C.UTF-8" : "C";
-	case LC_NUMERIC:
-		return "C";
-	case LC_MESSAGES:
-		return libc.global_locale.messages_name[0]
-			? libc.global_locale.messages_name : "C";
-	default:
-		lm = libc.global_locale.cat[cat-2];
-		return lm ? lm->name : "C";
-	}
+	UNLOCK(lock);
+
+	return ret;
 }

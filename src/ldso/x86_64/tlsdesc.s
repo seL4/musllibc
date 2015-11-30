@@ -1,11 +1,15 @@
 .text
 .global __tlsdesc_static
+.hidden __tlsdesc_static
 .type __tlsdesc_static,@function
 __tlsdesc_static:
 	mov 8(%rax),%rax
 	ret
 
+.hidden __tls_get_new
+
 .global __tlsdesc_dynamic
+.hidden __tlsdesc_dynamic
 .type __tlsdesc_dynamic,@function
 __tlsdesc_dynamic:
 	mov 8(%rax),%rax
@@ -29,7 +33,7 @@ __tlsdesc_dynamic:
 	push %r10
 	push %r11
 	mov %rax,%rdi
-	call __tls_get_addr
+	call __tls_get_new
 	pop %r11
 	pop %r10
 	pop %r9

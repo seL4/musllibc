@@ -20,9 +20,6 @@ weak_alias(dummy1, __init_ssp);
 
 #define AUX_CNT 38
 
-extern size_t __hwcap, __sysinfo;
-extern char *__progname, *__progname_full;
-
 #ifndef SHARED
 static
 #endif
@@ -70,6 +67,9 @@ int __libc_start_main(int (*main)(int,char **,char **), int argc, char **argv)
 	uintptr_t a = (uintptr_t)&__init_array_start;
 	for (; a<(uintptr_t)&__init_array_end; a+=sizeof(void(*)()))
 		(*(void (**)())a)();
+#else
+	void __libc_start_init(void);
+	__libc_start_init();
 #endif
 
 	/* Pass control to the application */

@@ -177,8 +177,11 @@ struct linger
 #define SO_SNDLOWAT     19
 #define SO_RCVTIMEO     20
 #define SO_SNDTIMEO     21
+#define SO_ACCEPTCONN   30
 #define SO_SNDBUFFORCE  32
 #define SO_RCVBUFFORCE  33
+#define SO_PROTOCOL     38
+#define SO_DOMAIN       39
 #endif
 
 #define SO_SECURITY_AUTHENTICATION              22
@@ -195,7 +198,6 @@ struct linger
 #define SO_TIMESTAMP            29
 #define SCM_TIMESTAMP           SO_TIMESTAMP
 
-#define SO_ACCEPTCONN           30
 #define SO_PEERSEC              31
 #define SO_PASSSEC              34
 #define SO_TIMESTAMPNS          35
@@ -203,8 +205,6 @@ struct linger
 #define SO_MARK                 36
 #define SO_TIMESTAMPING         37
 #define SCM_TIMESTAMPING        SO_TIMESTAMPING
-#define SO_PROTOCOL             38
-#define SO_DOMAIN               39
 #define SO_RXQ_OVFL             40
 #define SO_WIFI_STATUS          41
 #define SCM_WIFI_STATUS         SO_WIFI_STATUS
@@ -215,6 +215,10 @@ struct linger
 #define SO_BUSY_POLL            46
 #define SO_MAX_PACING_RATE      47
 #define SO_BPF_EXTENSIONS       48
+#define SO_INCOMING_CPU         49
+#define SO_ATTACH_BPF           50
+#define SO_DETACH_BPF           SO_DETACH_FILTER
+
 
 #ifndef SOL_SOCKET
 #define SOL_SOCKET      1

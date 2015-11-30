@@ -47,12 +47,15 @@ ALL_INCLUDES = $(sort $(NON_ARCH_INCLUDES:${SOURCE_DIR}/%=%) $(GENH) $(ARCH_INCL
 
 EMPTY_LIB_NAMES = m rt pthread crypt util xnet resolv dl
 EMPTY_LIBS = $(EMPTY_LIB_NAMES:%=lib/lib%.a)
-CRT_LIBS = lib/crt1.o lib/Scrt1.o lib/crti.o lib/crtn.o
+CRT_LIBS = lib/crt1.o lib/Scrt1.o lib/rcrt1.o lib/crti.o lib/crtn.o
 STATIC_LIBS = lib/libc.a
 SHARED_LIBS = lib/libc.so
 TOOL_LIBS = lib/musl-gcc.specs
 ALL_LIBS = $(CRT_LIBS) $(STATIC_LIBS) $(SHARED_LIBS) $(EMPTY_LIBS) $(TOOL_LIBS)
 ALL_TOOLS = tools/musl-gcc
+
+WRAPCC_GCC = gcc
+WRAPCC_CLANG = clang
 
 LDSO_PATHNAME = $(syslibdir)/ld-musl-$(ARCH)$(SUBARCH).so.1
 
@@ -89,17 +92,28 @@ src/internal/version.h: $(wildcard VERSION .git)
 
 src/internal/version.lo: src/internal/version.h
 
-src/ldso/dynlink.lo: arch/$(ARCH)/reloc.h
+crt/rcrt1.o src/ldso/dlstart.lo src/ldso/dynlink.lo: src/internal/dynlink.h arch/$(ARCH)/reloc.h
 
-crt/crt1.o crt/Scrt1.o: $(wildcard ${SOURCE_DIR}/arch/$(ARCH)/crt_arch.h)
+crt/crt1.o crt/Scrt1.o crt/rcrt1.o src/ldso/dlstart.lo: $(wildcard $(SOURCE_DIR)/arch/$(ARCH)/crt_arch.h)
 
-crt/Scrt1.o: CFLAGS += -fPIC
+crt/rcrt1.o: src/ldso/dlstart.c
+
+crt/Scrt1.o crt/rcrt1.o: CFLAGS += -fPIC
 
 OPTIMIZE_SRCS = $(wildcard $(OPTIMIZE_GLOBS:%=src/%))
 $(patsubst ${SOURCE_DIR}/%.c,%.o,$(OPTIMIZE_SRCS)) $(patsubst ${SOURCE_DIR}/%.c,%.lo,$(OPTIMIZE_SRCS)): CFLAGS += -O3
 
 MEMOPS_SRCS = src/string/memcpy.c src/string/memmove.c src/string/memcmp.c src/string/memset.c
 $(patsubst ${SOURCE_DIR}/%.c,%.o,$(MEMOPS_SRCS)) $(patsubst ${SOURCE_DIR}/%.c,%.lo,$(MEMOPS_SRCS)): CFLAGS += $(CFLAGS_MEMOPS)
+
+NOSSP_SRCS = $(wildcard crt/*.c) \
+	src/env/__libc_start_main.c src/env/__init_tls.c \
+	src/thread/__set_thread_area.c src/env/__stack_chk_fail.c \
+	src/string/memset.c src/string/memcpy.c \
+	src/ldso/dlstart.c src/ldso/dynlink.c
+$(NOSSP_SRCS:%.c=%.o) $(NOSSP_SRCS:%.c=%.lo): CFLAGS += $(CFLAGS_NOSSP)
+
+$(CRT_LIBS:lib/%=crt/%): CFLAGS += -DCRT
 
 # This incantation ensures that changes to any subarch asm files will
 # force the corresponding object file to be rebuilt, even if the implicit
@@ -109,13 +123,21 @@ $(dir $(patsubst ${SOURCE_DIR}/%/,%,$(dir $(1))))$(notdir $(1:.s=.o)): $(1)
 endef
 $(foreach s,$(wildcard ${SOURCE_DIR}/src/*/$(ARCH)*/*.s),$(eval $(call mkasmdep,$(s))))
 
+# Choose invocation of assembler to be used
+# $(1) is input file, $(2) is output file, $(3) is assembler flags
+ifeq ($(ADD_CFI),yes)
+	AS_CMD = LC_ALL=C awk -f tools/add-cfi.common.awk -f tools/add-cfi.$(ARCH).awk $< | $(CC) -x assembler -c -o $@ -
+else
+	AS_CMD = $(CC) -c -o $@ $<
+endif
+
 %.o: $(ARCH)$(ASMSUBARCH)/%.sub
 	mkdir -p $(@D)
 	$(CC) $(CFLAGS_ALL_STATIC) -c -o $@ $(dir $<)$(shell cat $<)
 
 %.o: $(ARCH)/%.s
 	mkdir -p $(@D)
-	$(CC) $(CFLAGS_ALL_STATIC) -c -o $@ $<
+	$(AS_CMD) $(CFLAGS_ALL_STATIC)
 
 %.o: %.c $(GENH) $(IMPH)
 	mkdir -p $(@D)
@@ -127,7 +149,7 @@ $(foreach s,$(wildcard ${SOURCE_DIR}/src/*/$(ARCH)*/*.s),$(eval $(call mkasmdep,
 
 %.lo: $(ARCH)/%.s
 	mkdir -p $(@D)
-	$(CC) $(CFLAGS_ALL_SHARED) -c -o $@ $<
+	$(AS_CMD) $(CFLAGS_ALL_SHARED)
 
 %.lo: %.c $(GENH) $(IMPH)
 	mkdir -p $(@D)
@@ -159,7 +181,11 @@ lib/musl-gcc.specs: tools/musl-gcc.specs.sh config.mak
 
 tools/musl-gcc: config.mak
 	mkdir -p $(@D)
-	printf '#!/bin/sh\nexec "$${REALGCC:-gcc}" "$$@" -specs "%s/musl-gcc.specs"\n' "$(libdir)" > $@
+	printf '#!/bin/sh\nexec "$${REALGCC:-$(WRAPCC_GCC)}" "$$@" -specs "%s/musl-gcc.specs"\n' "$(libdir)" > $@
+	chmod +x $@
+
+tools/%-clang: tools/%-clang.in config.mak
+	sed -e 's!@CC@!$(WRAPCC_CLANG)!g' -e 's!@PREFIX@!$(prefix)!g' -e 's!@INCDIR@!$(includedir)!g' -e 's!@LIBDIR@!$(libdir)!g' -e 's!@LDSO@!$(LDSO_PATHNAME)!g' $< > $@
 	chmod +x $@
 
 $(DESTDIR)$(bindir)/%: tools/%
@@ -191,7 +217,5 @@ musl-git-%.tar.gz: .git
 
 musl-%.tar.gz: .git
 	 git archive --format=tar.gz --prefix=$(patsubst %.tar.gz,%,$@)/ -o $@ v$(patsubst musl-%.tar.gz,%,$@)
-
-.PRECIOUS: $(CRT_LIBS:lib/%=crt/%)
 
 .PHONY: all clean install install-libs install-headers install-tools

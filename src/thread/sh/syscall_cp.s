@@ -1,9 +1,16 @@
 .text
+.global __cp_begin
+.hidden __cp_begin
+.global __cp_end
+.hidden __cp_end
+.global __cp_cancel
+.hidden __cp_cancel
+.hidden __cancel
 .global __syscall_cp_asm
+.hidden __syscall_cp_asm
 .type   __syscall_cp_asm, @function
 __syscall_cp_asm:
 
-.global __cp_begin
 __cp_begin:
 	mov.l @r4, r4
 	tst   r4, r4
@@ -24,9 +31,8 @@ L1:	.long __cancel@PLT-(1b-.)
 	mov.l @(4,r15), r7
 	mov.l @(8,r15), r0
 	mov.l @(12,r15), r1
-	trapa #22
+	trapa #31
 
-.global __cp_end
 __cp_end:
 	! work around hardware bug
 	or   r0, r0

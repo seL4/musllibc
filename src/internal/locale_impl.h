@@ -1,3 +1,6 @@
+#ifndef _LOCALE_IMPL_H
+#define _LOCALE_IMPL_H
+
 #include <locale.h>
 #include <stdlib.h>
 #include "libc.h"
@@ -9,22 +12,29 @@ struct __locale_map {
 	const void *map;
 	size_t map_size;
 	char name[LOCALE_NAME_MAX+1];
-	struct __locale_map *next;
+	const struct __locale_map *next;
 };
 
-int __setlocalecat(locale_t, int, const char *);
+extern const struct __locale_map __c_dot_utf8;
+extern const struct __locale_struct __c_locale;
+extern const struct __locale_struct __c_dot_utf8_locale;
+
+const struct __locale_map *__get_locale(int, const char *);
 const char *__mo_lookup(const void *, size_t, const char *);
 const char *__lctrans(const char *, const struct __locale_map *);
 const char *__lctrans_cur(const char *);
 
-#define LCTRANS(msg, lc, loc) __lctrans(msg, (loc)->cat[(lc)-2])
+#define LCTRANS(msg, lc, loc) __lctrans(msg, (loc)->cat[(lc)])
 #define LCTRANS_CUR(msg) __lctrans_cur(msg)
 
-#define CURRENT_LOCALE \
-	(libc.uselocale_cnt ? __pthread_self()->locale : &libc.global_locale)
+#define C_LOCALE ((locale_t)&__c_locale)
+#define UTF8_LOCALE ((locale_t)&__c_dot_utf8_locale)
 
-#define CURRENT_UTF8 \
-	(libc.bytelocale_cnt_minus_1<0 || __pthread_self()->locale->ctype_utf8)
+#define CURRENT_LOCALE (__pthread_self()->locale)
+
+#define CURRENT_UTF8 (!!__pthread_self()->locale->cat[LC_CTYPE])
 
 #undef MB_CUR_MAX
 #define MB_CUR_MAX (CURRENT_UTF8 ? 4 : 1)
+
+#endif

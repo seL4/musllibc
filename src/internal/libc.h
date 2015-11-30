@@ -8,39 +8,25 @@
 struct __locale_map;
 
 struct __locale_struct {
-	int ctype_utf8;
-	char *messages_name;
-	struct __locale_map *cat[4];
+	const struct __locale_map *volatile cat[6];
 };
 
 struct __libc {
-	int has_thread_pointer;
 	int can_do_threads;
 	int threaded;
 	int secure;
-	size_t *auxv;
 	volatile int threads_minus_1;
-	FILE *ofl_head;
-	int ofl_lock[2];
+	size_t *auxv;
 	size_t tls_size;
 	size_t page_size;
-	volatile int uselocale_cnt;
-	volatile int bytelocale_cnt_minus_1;
 	struct __locale_struct global_locale;
 };
-
-extern size_t __hwcap;
 
 #ifndef PAGE_SIZE
 #define PAGE_SIZE libc.page_size
 #endif
 
-#if !defined(__PIC__) || (100*__GNUC__+__GNUC_MINOR__ >= 303 && !defined(__PCC__))
-
 #ifdef __PIC__
-#if __GNUC__ < 4
-#define BROKEN_VISIBILITY 1
-#endif
 #define ATTR_LIBC_VISIBILITY __attribute__((visibility("hidden")))
 #else
 #define ATTR_LIBC_VISIBILITY
@@ -49,15 +35,9 @@ extern size_t __hwcap;
 extern struct __libc __libc ATTR_LIBC_VISIBILITY;
 #define libc __libc
 
-#else
-
-#define USE_LIBC_ACCESSOR
-#define ATTR_LIBC_VISIBILITY
-extern struct __libc *__libc_loc(void) __attribute__((const));
-#define libc (*__libc_loc())
-
-#endif
-
+extern size_t __hwcap ATTR_LIBC_VISIBILITY;
+extern size_t __sysinfo ATTR_LIBC_VISIBILITY;
+extern char *__progname, *__progname_full;
 
 /* Designed to avoid any overhead in non-threaded processes */
 void __lock(volatile int *) ATTR_LIBC_VISIBILITY;

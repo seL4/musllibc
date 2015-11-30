@@ -63,6 +63,7 @@ extern "C" {
 
 #define SEGV_MAPERR 1
 #define SEGV_ACCERR 2
+#define SEGV_BNDERR 3
 
 #define BUS_ADRALN 1
 #define BUS_ADRERR 2
@@ -110,6 +111,10 @@ typedef struct {
 		struct {
 			void *si_addr;
 			short si_addr_lsb;
+			struct {
+				void *si_lower;
+				void *si_upper;
+			} __addr_bnd;
 		} __sigfault;
 		struct {
 			long si_band;
@@ -130,6 +135,8 @@ typedef struct {
 #define si_value   __si_fields.__si_common.__second.si_value
 #define si_addr    __si_fields.__sigfault.si_addr
 #define si_addr_lsb __si_fields.__sigfault.si_addr_lsb
+#define si_lower   __si_fields.__sigfault.__addr_bnd.si_lower
+#define si_upper   __si_fields.__sigfault.__addr_bnd.si_upper
 #define si_band    __si_fields.__sigpoll.si_band
 #define si_fd      __si_fields.__sigpoll.si_fd
 #define si_timerid __si_fields.__si_common.__first.__timer.si_timerid
@@ -196,7 +203,7 @@ void psignal(int, const char *);
 
 #endif
 
-#if defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE)
+#if defined(_XOPEN_SOURCE) || defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
 int killpg(pid_t, int);
 int sigaltstack(const stack_t *__restrict, stack_t *__restrict);
 int sighold(int);
@@ -215,8 +222,6 @@ void (*sigset(int, void (*)(int)))(int);
 #define POLL_HUP 6
 #define SS_ONSTACK    1
 #define SS_DISABLE    2
-#define MINSIGSTKSZ 2048
-#define SIGSTKSZ 8192
 #endif
 
 #if defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
