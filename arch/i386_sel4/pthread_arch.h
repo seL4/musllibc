@@ -1,8 +1,10 @@
+/* The tls in this file is a hack to provide a struct as proper tls wasn't working yet
+*/
+struct pthread global_tls;
+
 static inline struct pthread *__pthread_self()
 {
-	struct pthread *self;
-	__asm__ __volatile__ ("movl %%fs:0,%0" : "=r" (self) );
-	return self;
+	return &global_tls;
 }
 
 #define TP_ADJ(p) (p)
