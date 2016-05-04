@@ -177,6 +177,7 @@ lib/%.o: crt/%.o
 	cp $< $@
 
 lib/musl-gcc.specs: tools/musl-gcc.specs.sh config.mak
+	mkdir -p $(@D)
 	sh $< "$(includedir)" "$(libdir)" "$(LDSO_PATHNAME)" > $@
 
 tools/musl-gcc: config.mak
