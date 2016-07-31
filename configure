@@ -323,6 +323,7 @@ mips*) ARCH=mips ;;
 microblaze*) ARCH=microblaze ;;
 or1k*) ARCH=or1k ;;
 powerpc64*) ARCH=powerpc64 ;;
+riscv*) ARCH=riscv ;;
 powerpc*) ARCH=powerpc ;;
 sh[1-9bel-]*|sh|superh*) ARCH=sh ;;
 s390x*) ARCH=s390x ;;
