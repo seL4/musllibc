@@ -7,6 +7,7 @@
 # any registers
 
 .global __syscall
+.hidden __syscall
 .type __syscall,@function
 __syscall:
     subq $8, %rsp           # Reserve space for tail call
