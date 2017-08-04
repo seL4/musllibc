@@ -1,1 +1,0 @@
-../../i386/bits/resource.h
