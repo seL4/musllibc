@@ -1,1 +1,0 @@
-../../arm/src/atomics.c
