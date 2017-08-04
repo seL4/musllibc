@@ -1,242 +1,63 @@
 #
-# Makefile for musl (requires GNU make)
+# Copyright 2017, Data61
+# Commonwealth Scientific and Industrial Research Organisation (CSIRO)
+# ABN 41 687 119 230.
 #
-# This is how simple every makefile should be...
-# No, I take that back - actually most should be less than half this size.
+# This software may be distributed and modified according to the terms of
+# the BSD 2-Clause license. Note that NO WARRANTY is provided.
+# See "LICENSE_BSD2.txt" for details.
 #
-# Use config.mak to override any of the following variables.
-# Do not make changes here.
+# @TAG(DATA61_BSD)
 #
 
-srcdir = .
-exec_prefix = /usr/local
-bindir = $(exec_prefix)/bin
+# This is a bit of a hacky wrapper around the original muslc Makefile, which has
+# been renamed Makefile.muslc. This wrapper allows for bashing muslc into the
+# greater seL4 build system, but still preserving the original Makefile (albeit renamed)
+# to allow for ease of merging changes
 
-prefix = /usr/local/musl
-includedir = $(prefix)/include
-libdir = $(prefix)/lib
-syslibdir = /lib
+all: build_muslc
 
-SRC_DIRS = $(addprefix $(srcdir)/,src/* crt ldso)
-BASE_GLOBS = $(addsuffix /*.c,$(SRC_DIRS))
-ARCH_GLOBS = $(addsuffix /$(ARCH)/*.[csS],$(SRC_DIRS))
-BASE_SRCS = $(sort $(wildcard $(BASE_GLOBS)))
-ARCH_SRCS = $(sort $(wildcard $(ARCH_GLOBS)))
-BASE_OBJS = $(patsubst $(srcdir)/%,%.o,$(basename $(BASE_SRCS)))
-ARCH_OBJS = $(patsubst $(srcdir)/%,%.o,$(basename $(ARCH_SRCS)))
-REPLACED_OBJS = $(sort $(subst /$(ARCH)/,/,$(ARCH_OBJS)))
-ALL_OBJS = $(addprefix obj/, $(filter-out $(REPLACED_OBJS), $(sort $(BASE_OBJS) $(ARCH_OBJS))))
-
-LIBC_OBJS = $(filter obj/src/%,$(ALL_OBJS))
-LDSO_OBJS = $(filter obj/ldso/%,$(ALL_OBJS:%.o=%.lo))
-CRT_OBJS = $(filter obj/crt/%,$(ALL_OBJS))
-
-AOBJS = $(LIBC_OBJS)
-LOBJS = $(LIBC_OBJS:.o=.lo)
-GENH = obj/include/bits/alltypes.h obj/include/bits/syscall.h
-GENH_INT = obj/src/internal/version.h
-IMPH = $(addprefix $(srcdir)/, src/internal/stdio_impl.h src/internal/pthread_impl.h src/internal/libc.h)
-
-LDFLAGS =
-LDFLAGS_AUTO =
-LIBCC = -lgcc
-CPPFLAGS =
-CFLAGS =
-CFLAGS_AUTO = -Os -pipe
-CFLAGS_C99FSE = -std=c99 -ffreestanding -nostdinc 
-
-CFLAGS_ALL = $(CFLAGS_C99FSE)
-CFLAGS_ALL += -D_XOPEN_SOURCE=700 -I$(srcdir)/arch/$(ARCH) -I$(srcdir)/arch/generic -Iobj/src/internal -I$(srcdir)/src/internal -Iobj/include -I$(srcdir)/include
-CFLAGS_ALL += $(CPPFLAGS) $(CFLAGS_AUTO) $(CFLAGS)
-
-LDFLAGS_ALL = $(LDFLAGS_AUTO) $(LDFLAGS)
-
-AR      = $(CROSS_COMPILE)ar
-RANLIB  = $(CROSS_COMPILE)ranlib
-INSTALL = $(srcdir)/tools/install.sh
-
-ARCH_INCLUDES = $(wildcard $(srcdir)/arch/$(ARCH)/bits/*.h)
-GENERIC_INCLUDES = $(wildcard $(srcdir)/arch/generic/bits/*.h)
-INCLUDES = $(wildcard $(srcdir)/include/*.h $(srcdir)/include/*/*.h)
-ALL_INCLUDES = $(sort $(INCLUDES:$(srcdir)/%=%) $(GENH:obj/%=%) $(ARCH_INCLUDES:$(srcdir)/arch/$(ARCH)/%=include/%) $(GENERIC_INCLUDES:$(srcdir)/arch/generic/%=include/%))
-
-EMPTY_LIB_NAMES = m rt pthread crypt util xnet resolv dl
-EMPTY_LIBS = $(EMPTY_LIB_NAMES:%=lib/lib%.a)
-CRT_LIBS = $(addprefix lib/,$(notdir $(CRT_OBJS)))
-STATIC_LIBS = lib/libc.a
-SHARED_LIBS = lib/libc.so
-TOOL_LIBS = lib/musl-gcc.specs
-ALL_LIBS = $(CRT_LIBS) $(STATIC_LIBS) $(SHARED_LIBS) $(EMPTY_LIBS) $(TOOL_LIBS)
-ALL_TOOLS = obj/musl-gcc
-
-WRAPCC_GCC = gcc
-WRAPCC_CLANG = clang
-
-LDSO_PATHNAME = $(syslibdir)/ld-musl-$(ARCH)$(SUBARCH).so.1
-
--include config.mak
-
-ifeq ($(ARCH),)
-
-all:
-	@echo "Please set ARCH in config.mak before running make."
-	@exit 1
-
+ifeq (${CONFIG_USER_DEBUG_BUILD},y)
+    ENABLE_DEBUG = --enable-debug
 else
-
-all: $(ALL_LIBS) $(ALL_TOOLS)
-
-OBJ_DIRS = $(sort $(patsubst %/,%,$(dir $(ALL_LIBS) $(ALL_TOOLS) $(ALL_OBJS) $(GENH) $(GENH_INT))) obj/include)
-
-$(ALL_LIBS) $(ALL_TOOLS) $(ALL_OBJS) $(ALL_OBJS:%.o=%.lo) $(GENH) $(GENH_INT): | $(OBJ_DIRS)
-
-$(OBJ_DIRS):
-	mkdir -p $@
-
-obj/include/bits/alltypes.h: $(srcdir)/arch/$(ARCH)/bits/alltypes.h.in $(srcdir)/include/alltypes.h.in $(srcdir)/tools/mkalltypes.sed
-	sed -f $(srcdir)/tools/mkalltypes.sed $(srcdir)/arch/$(ARCH)/bits/alltypes.h.in $(srcdir)/include/alltypes.h.in > $@
-
-obj/include/bits/syscall.h: $(srcdir)/arch/$(ARCH)/bits/syscall.h.in
-	cp $< $@
-	sed -n -e s/__NR_/SYS_/p < $< >> $@
-
-obj/src/internal/version.h: $(wildcard $(srcdir)/VERSION $(srcdir)/.git)
-	printf '#define VERSION "%s"\n' "$$(cd $(srcdir); sh tools/version.sh)" > $@
-
-obj/src/internal/version.o obj/src/internal/version.lo: obj/src/internal/version.h
-
-obj/crt/rcrt1.o obj/ldso/dlstart.lo obj/ldso/dynlink.lo: $(srcdir)/src/internal/dynlink.h $(srcdir)/arch/$(ARCH)/reloc.h
-
-obj/crt/crt1.o obj/crt/scrt1.o obj/crt/rcrt1.o obj/ldso/dlstart.lo: $(srcdir)/arch/$(ARCH)/crt_arch.h
-
-obj/crt/rcrt1.o: $(srcdir)/ldso/dlstart.c
-
-obj/crt/Scrt1.o obj/crt/rcrt1.o: CFLAGS_ALL += -fPIC
-
-obj/crt/$(ARCH)/crti.o: $(srcdir)/crt/$(ARCH)/crti.s
-
-obj/crt/$(ARCH)/crtn.o: $(srcdir)/crt/$(ARCH)/crtn.s
-
-OPTIMIZE_SRCS = $(wildcard $(OPTIMIZE_GLOBS:%=$(srcdir)/src/%))
-$(OPTIMIZE_SRCS:$(srcdir)/%.c=obj/%.o) $(OPTIMIZE_SRCS:$(srcdir)/%.c=obj/%.lo): CFLAGS += -O3
-
-MEMOPS_SRCS = src/string/memcpy.c src/string/memmove.c src/string/memcmp.c src/string/memset.c
-$(MEMOPS_SRCS:%.c=obj/%.o) $(MEMOPS_SRCS:%.c=obj/%.lo): CFLAGS_ALL += $(CFLAGS_MEMOPS)
-
-NOSSP_SRCS = $(wildcard crt/*.c) \
-	src/env/__libc_start_main.c src/env/__init_tls.c \
-	src/env/__stack_chk_fail.c \
-	src/thread/__set_thread_area.c src/thread/$(ARCH)/__set_thread_area.c \
-	src/string/memset.c src/string/$(ARCH)/memset.c \
-	src/string/memcpy.c src/string/$(ARCH)/memcpy.c \
-	ldso/dlstart.c ldso/dynlink.c
-$(NOSSP_SRCS:%.c=obj/%.o) $(NOSSP_SRCS:%.c=obj/%.lo): CFLAGS_ALL += $(CFLAGS_NOSSP)
-
-$(CRT_OBJS): CFLAGS_ALL += -DCRT
-
-$(LOBJS) $(LDSO_OBJS): CFLAGS_ALL += -fPIC
-
-CC_CMD = $(CC) $(CFLAGS_ALL) -c -o $@ $<
-
-# Choose invocation of assembler to be used
-ifeq ($(ADD_CFI),yes)
-	AS_CMD = LC_ALL=C awk -f $(srcdir)/tools/add-cfi.common.awk -f $(srcdir)/tools/add-cfi.$(ARCH).awk $< | $(CC) $(CFLAGS_ALL) -x assembler -c -o $@ -
-else
-	AS_CMD = $(CC_CMD)
+	ENABLE_DEBUG =
 endif
 
-obj/%.o: $(srcdir)/%.s
-	$(AS_CMD)
-
-obj/%.o: $(srcdir)/%.S
-	$(CC_CMD)
-
-obj/%.o: $(srcdir)/%.c $(GENH) $(IMPH)
-	$(CC_CMD)
-
-obj/%.lo: $(srcdir)/%.s
-	$(AS_CMD)
-
-obj/%.lo: $(srcdir)/%.S
-	$(CC_CMD)
-
-obj/%.lo: $(srcdir)/%.c $(GENH) $(IMPH)
-	$(CC_CMD)
-
-lib/libc.so: $(LOBJS) $(LDSO_OBJS)
-	$(CC) $(CFLAGS_ALL) $(LDFLAGS_ALL) -nostdlib -shared \
-	-Wl,-e,_dlstart -o $@ $(LOBJS) $(LDSO_OBJS) $(LIBCC)
-
-lib/libc.a: $(AOBJS)
-	rm -f $@
-	$(AR) rc $@ $(AOBJS)
-	$(RANLIB) $@
-
-$(EMPTY_LIBS):
-	rm -f $@
-	$(AR) rc $@
-
-lib/%.o: obj/crt/$(ARCH)/%.o
-	cp $< $@
-
-lib/%.o: obj/crt/%.o
-	cp $< $@
-
-lib/musl-gcc.specs: $(srcdir)/tools/musl-gcc.specs.sh config.mak
-	sh $< "$(includedir)" "$(libdir)" "$(LDSO_PATHNAME)" > $@
-
-obj/musl-gcc: config.mak
-	printf '#!/bin/sh\nexec "$${REALGCC:-$(WRAPCC_GCC)}" "$$@" -specs "%s/musl-gcc.specs"\n' "$(libdir)" > $@
-	chmod +x $@
-
-obj/%-clang: $(srcdir)/tools/%-clang.in config.mak
-	sed -e 's!@CC@!$(WRAPCC_CLANG)!g' -e 's!@PREFIX@!$(prefix)!g' -e 's!@INCDIR@!$(includedir)!g' -e 's!@LIBDIR@!$(libdir)!g' -e 's!@LDSO@!$(LDSO_PATHNAME)!g' $< > $@
-	chmod +x $@
-
-$(DESTDIR)$(bindir)/%: obj/%
-	$(INSTALL) -D $< $@
-
-$(DESTDIR)$(libdir)/%.so: lib/%.so
-	$(INSTALL) -D -m 755 $< $@
-
-$(DESTDIR)$(libdir)/%: lib/%
-	$(INSTALL) -D -m 644 $< $@
-
-$(DESTDIR)$(includedir)/bits/%: $(srcdir)/arch/$(ARCH)/bits/%
-	$(INSTALL) -D -m 644 $< $@
-
-$(DESTDIR)$(includedir)/bits/%: $(srcdir)/arch/generic/bits/%
-	$(INSTALL) -D -m 644 $< $@
-
-$(DESTDIR)$(includedir)/bits/%: obj/include/bits/%
-	$(INSTALL) -D -m 644 $< $@
-
-$(DESTDIR)$(includedir)/%: $(srcdir)/include/%
-	$(INSTALL) -D -m 644 $< $@
-
-$(DESTDIR)$(LDSO_PATHNAME): $(DESTDIR)$(libdir)/libc.so
-	$(INSTALL) -D -l $(libdir)/libc.so $@ || true
-
-install-libs: $(ALL_LIBS:lib/%=$(DESTDIR)$(libdir)/%) $(if $(SHARED_LIBS),$(DESTDIR)$(LDSO_PATHNAME),)
-
-install-headers: $(ALL_INCLUDES:include/%=$(DESTDIR)$(includedir)/%)
-
-install-tools: $(ALL_TOOLS:obj/%=$(DESTDIR)$(bindir)/%)
-
-install: install-libs install-headers install-tools
-
-musl-git-%.tar.gz: .git
-	 git --git-dir=$(srcdir)/.git archive --format=tar.gz --prefix=$(patsubst %.tar.gz,%,$@)/ -o $@ $(patsubst musl-git-%.tar.gz,%,$@)
-
-musl-%.tar.gz: .git
-	 git --git-dir=$(srcdir)/.git archive --format=tar.gz --prefix=$(patsubst %.tar.gz,%,$@)/ -o $@ v$(patsubst musl-%.tar.gz,%,$@)
-
+ifeq (${CONFIG_ARCH_IA32},y)
+    TARGET = i386
 endif
 
-clean:
-	rm -rf obj lib
+ifeq (${CONFIG_ARCH_AARCH32},y)
+    TARGET = arm
+endif
 
-distclean: clean
-	rm -f config.mak
+ifeq (${CONFIG_ARCH_X86_64},y)
+    TARGET = x86_64
+endif
 
-.PHONY: all clean install install-libs install-headers install-tools
+ifeq (${CONFIG_ARCH_AARCH64},y)
+    TARGET = aarch64
+endif
+
+ifeq (${CONFIG_LINK_TIME_OPTIMISATIONS},y)
+    CFLAGS += -flto
+endif
+
+
+CC = ${TOOLPREFIX}gcc${TOOLSUFFIX}
+CROSS_COMPILE = ${TOOLPREFIX}
+CFLAGS += ${NK_CFLAGS}
+
+export CC CROSS_COMPILE CFLAGS
+
+build_muslc:
+	# muslc does not support out of tree builds, so step 1 is to copy the source
+	# into the build directory
+	cp -a $(SOURCE_DIR)/* .
+	# Configure muslc, using the non _sel4 arch. Send everything to /dev/null as it's a bit noisy
+	./configure --prefix=${STAGE_DIR} ${ENABLE_DEBUG} \
+    	--target=${TARGET} --enable-warnings --disable-shared --enable-static > /dev/null
+	# Now that configuration is done and flags have been set change the ARCH to the _sel4 one
+	sed -i 's/^ARCH = \(.*\)/ARCH = \1_sel4/' config.mak
+	$(MAKE) CFLAGS="${CFLAGS}" CC="${CC}" CROSS_COMPILE="${CROSS_COMILE}" -f Makefile.muslc
+	$(MAKE) CFLAGS="${CFLAGS}" CC="${CC}" CROSS_COMPILE="${CROSS_COMILE}" -f Makefile.muslc install-libs install-headers
