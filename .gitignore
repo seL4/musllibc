@@ -1,3 +1,0 @@
-arch/*/bits/alltypes.h
-tools/musl-clang
-tools/ld.musl-clang

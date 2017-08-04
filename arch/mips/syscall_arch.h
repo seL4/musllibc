@@ -3,9 +3,7 @@
 ((union { long long ll; long l[2]; }){ .ll = x }).l[1]
 #define __SYSCALL_LL_O(x) 0, __SYSCALL_LL_E((x))
 
-#ifdef SHARED
 __attribute__((visibility("hidden")))
-#endif
 long (__syscall)(long, ...);
 
 #define SYSCALL_RLIM_INFINITY (-1UL/2)
@@ -163,3 +161,7 @@ static inline long __syscall6(long n, long a, long b, long c, long d, long e, lo
 	if (n == SYS_fstatat) __stat_fix(c);
 	return r2;
 }
+
+#define VDSO_USEFUL
+#define VDSO_CGT_SYM "__vdso_clock_gettime"
+#define VDSO_CGT_VER "LINUX_2.6"

@@ -79,7 +79,7 @@ _Noreturn void __pthread_exit(void *result)
 		int priv = (m->_m_type & 128) ^ 128;
 		self->robust_list.pending = rp;
 		self->robust_list.head = *rp;
-		int cont = a_swap(&m->_m_lock, self->tid|0x40000000);
+		int cont = a_swap(&m->_m_lock, 0x40000000);
 		self->robust_list.pending = 0;
 		if (cont < 0 || waiters)
 			__wake(&m->_m_lock, 1, priv);
@@ -163,6 +163,8 @@ static void *dummy_tsd[1] = { 0 };
 weak_alias(dummy_tsd, __pthread_tsd_main);
 
 volatile int __block_new_threads = 0;
+size_t __default_stacksize = DEFAULT_STACK_SIZE;
+size_t __default_guardsize = DEFAULT_GUARD_SIZE;
 
 static FILE *volatile dummy_file = 0;
 weak_alias(dummy_file, __stdin_used);
@@ -186,7 +188,7 @@ int __pthread_create(pthread_t *restrict res, const pthread_attr_t *restrict att
 		| CLONE_THREAD | CLONE_SYSVSEM | CLONE_SETTLS
 		| CLONE_PARENT_SETTID | CLONE_CHILD_CLEARTID | CLONE_DETACHED;
 	int do_sched = 0;
-	pthread_attr_t attr = {0};
+	pthread_attr_t attr = { 0 };
 
 	if (!libc.can_do_threads) return ENOSYS;
 	self = __pthread_self();
@@ -204,11 +206,16 @@ int __pthread_create(pthread_t *restrict res, const pthread_attr_t *restrict att
 	if (attrp && !c11) attr = *attrp;
 
 	__acquire_ptc();
+	if (!attrp || c11) {
+		attr._a_stacksize = __default_stacksize;
+		attr._a_guardsize = __default_guardsize;
+	}
+
 	if (__block_new_threads) __wait(&__block_new_threads, 0, 1, 1);
 
 	if (attr._a_stackaddr) {
 		size_t need = libc.tls_size + __pthread_tsd_size;
-		size = attr._a_stacksize + DEFAULT_STACK_SIZE;
+		size = attr._a_stacksize;
 		stack = (void *)(attr._a_stackaddr & -16);
 		stack_limit = (void *)(attr._a_stackaddr - size);
 		/* Use application-provided stack for TLS only when
@@ -223,8 +230,8 @@ int __pthread_create(pthread_t *restrict res, const pthread_attr_t *restrict att
 			guard = 0;
 		}
 	} else {
-		guard = ROUND(DEFAULT_GUARD_SIZE + attr._a_guardsize);
-		size = guard + ROUND(DEFAULT_STACK_SIZE + attr._a_stacksize
+		guard = ROUND(attr._a_guardsize);
+		size = guard + ROUND(attr._a_stacksize
 			+ libc.tls_size +  __pthread_tsd_size);
 	}
 

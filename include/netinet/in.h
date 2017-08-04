@@ -13,16 +13,14 @@ typedef uint16_t in_port_t;
 typedef uint32_t in_addr_t;
 struct in_addr { in_addr_t s_addr; };
 
-struct sockaddr_in
-{
+struct sockaddr_in {
 	sa_family_t sin_family;
 	in_port_t sin_port;
 	struct in_addr sin_addr;
 	uint8_t sin_zero[8];
 };
 
-struct in6_addr
-{
+struct in6_addr {
 	union {
 		uint8_t __s6_addr[16];
 		uint16_t __s6_addr16[8];
@@ -33,8 +31,7 @@ struct in6_addr
 #define s6_addr16 __in6_union.__s6_addr16
 #define s6_addr32 __in6_union.__s6_addr32
 
-struct sockaddr_in6
-{
+struct sockaddr_in6 {
 	sa_family_t     sin6_family;
 	in_port_t       sin6_port;
 	uint32_t        sin6_flowinfo;
@@ -42,8 +39,7 @@ struct sockaddr_in6
 	uint32_t        sin6_scope_id;
 };
 
-struct ipv6_mreq
-{
+struct ipv6_mreq {
 	struct in6_addr ipv6mr_multiaddr;
 	unsigned        ipv6mr_interface;
 };
@@ -103,6 +99,7 @@ uint16_t ntohs(uint16_t);
 #define IPPROTO_SCTP     132
 #define IPPROTO_MH       135
 #define IPPROTO_UDPLITE  136
+#define IPPROTO_MPLS     137
 #define IPPROTO_RAW      255
 #define IPPROTO_MAX      256
 
@@ -200,6 +197,7 @@ uint16_t ntohs(uint16_t);
 #define IP_MINTTL          21
 #define IP_NODEFRAG        22
 #define IP_CHECKSUM        23
+#define IP_BIND_ADDRESS_NO_PORT 24
 #define IP_MULTICAST_IF    32
 #define IP_MULTICAST_TTL   33
 #define IP_MULTICAST_LOOP  34
@@ -226,8 +224,7 @@ uint16_t ntohs(uint16_t);
 #define IP_DEFAULT_MULTICAST_LOOP       1
 #define IP_MAX_MEMBERSHIPS              20
 
-struct ip_opts
-{
+struct ip_opts {
 	struct in_addr ip_dst;
 	char ip_opts[40];
 };
@@ -245,14 +242,12 @@ struct ip_opts
 #define MCAST_EXCLUDE 0
 #define MCAST_INCLUDE 1
 
-struct ip_mreq
-{
+struct ip_mreq {
 	struct in_addr imr_multiaddr;
 	struct in_addr imr_interface;
 };
 
-struct ip_mreqn
-{
+struct ip_mreqn {
 	struct in_addr imr_multiaddr;
 	struct in_addr imr_address;
 	int imr_ifindex;
@@ -297,21 +292,18 @@ struct group_filter {
 	(sizeof(struct group_filter) - sizeof(struct sockaddr_storage) \
 	+ (numsrc) * sizeof(struct sockaddr_storage))
 
-struct in_pktinfo
-{
+struct in_pktinfo {
 	int ipi_ifindex;
 	struct in_addr ipi_spec_dst;
 	struct in_addr ipi_addr;
 };
 
-struct in6_pktinfo
-{
+struct in6_pktinfo {
 	struct in6_addr ipi6_addr;
 	unsigned ipi6_ifindex;
 };
 
-struct ip6_mtuinfo
-{
+struct ip6_mtuinfo {
 	struct sockaddr_in6 ip6m_addr;
 	uint32_t ip6m_mtu;
 };
@@ -342,6 +334,7 @@ struct ip6_mtuinfo
 #define IPV6_LEAVE_ANYCAST      28
 #define IPV6_IPSEC_POLICY       34
 #define IPV6_XFRM_POLICY        35
+#define IPV6_HDRINCL            36
 
 #define IPV6_RECVPKTINFO        49
 #define IPV6_PKTINFO            50
@@ -391,6 +384,21 @@ struct ip6_mtuinfo
 #define IPV6_RTHDR_STRICT       1
 
 #define IPV6_RTHDR_TYPE_0       0
+
+#define __UAPI_DEF_IN_ADDR      0
+#define __UAPI_DEF_IN_IPPROTO   0
+#define __UAPI_DEF_IN_PKTINFO   0
+#define __UAPI_DEF_IP_MREQ      0
+#define __UAPI_DEF_SOCKADDR_IN  0
+#define __UAPI_DEF_IN_CLASS     0
+#define __UAPI_DEF_IN6_ADDR     0
+#define __UAPI_DEF_IN6_ADDR_ALT 0
+#define __UAPI_DEF_SOCKADDR_IN6 0
+#define __UAPI_DEF_IPV6_MREQ    0
+#define __UAPI_DEF_IPPROTO_V6   0
+#define __UAPI_DEF_IPV6_OPTIONS 0
+#define __UAPI_DEF_IN6_PKTINFO  0
+#define __UAPI_DEF_IP6_MTUINFO  0
 
 #ifdef __cplusplus
 }

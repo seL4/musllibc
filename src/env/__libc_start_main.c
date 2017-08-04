@@ -8,21 +8,17 @@
 
 void __init_tls(size_t *);
 
-#ifndef SHARED
-static void dummy() {}
+static void dummy(void) {}
 weak_alias(dummy, _init);
-extern void (*const __init_array_start)() __attribute__((weak));
-extern void (*const __init_array_end)() __attribute__((weak));
-#endif
+
+__attribute__((__weak__, __visibility__("hidden")))
+extern void (*const __init_array_start)(void), (*const __init_array_end)(void);
 
 static void dummy1(void *p) {}
 weak_alias(dummy1, __init_ssp);
 
 #define AUX_CNT 38
 
-#ifndef SHARED
-static
-#endif
 void __init_libc(char **envp, char *pn)
 {
 	size_t i, *auxv, aux[AUX_CNT] = { 0 };
@@ -57,20 +53,22 @@ void __init_libc(char **envp, char *pn)
 	libc.secure = 1;
 }
 
-int __libc_start_main(int (*main)(int,char **,char **), int argc, char **argv)
+static void libc_start_init(void)
 {
-	char **envp = argv+argc+1;
-
-#ifndef SHARED
-	__init_libc(envp, argv[0]);
 	_init();
 	uintptr_t a = (uintptr_t)&__init_array_start;
 	for (; a<(uintptr_t)&__init_array_end; a+=sizeof(void(*)()))
 		(*(void (**)())a)();
-#else
-	void __libc_start_init(void);
+}
+
+weak_alias(libc_start_init, __libc_start_init);
+
+int __libc_start_main(int (*main)(int,char **,char **), int argc, char **argv)
+{
+	char **envp = argv+argc+1;
+
+	__init_libc(envp, argv[0]);
 	__libc_start_init();
-#endif
 
 	/* Pass control to the application */
 	exit(main(argc, argv, envp));

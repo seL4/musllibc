@@ -27,6 +27,10 @@
 #define TCP_FASTOPEN     23
 #define TCP_TIMESTAMP    24
 #define TCP_NOTSENT_LOWAT 25
+#define TCP_CC_INFO      26
+#define TCP_SAVE_SYN     27
+#define TCP_SAVED_SYN    28
+#define TCP_REPAIR_WINDOW 29
 
 #define TCP_ESTABLISHED  1
 #define TCP_SYN_SENT     2
@@ -41,7 +45,20 @@
 #define TCP_CLOSING      11
 
 #if defined(_GNU_SOURCE) || defined(_BSD_SOURCE)
+#define TCPOPT_EOL              0
+#define TCPOPT_NOP              1
+#define TCPOPT_MAXSEG           2
+#define TCPOPT_WINDOW           3
+#define TCPOPT_SACK_PERMITTED   4
+#define TCPOPT_SACK             5
+#define TCPOPT_TIMESTAMP        8
+#define TCPOLEN_SACK_PERMITTED  2
+#define TCPOLEN_WINDOW          3
+#define TCPOLEN_MAXSEG          4
+#define TCPOLEN_TIMESTAMP       10
+
 #define SOL_TCP 6
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <stdint.h>
@@ -129,8 +146,7 @@ struct tcphdr {
 #define TCP_CA_Recovery		3
 #define TCP_CA_Loss		4
 
-struct tcp_info
-{
+struct tcp_info {
 	uint8_t tcpi_state;
 	uint8_t tcpi_ca_state;
 	uint8_t tcpi_retransmits;
@@ -138,6 +154,7 @@ struct tcp_info
 	uint8_t tcpi_backoff;
 	uint8_t tcpi_options;
 	uint8_t tcpi_snd_wscale : 4, tcpi_rcv_wscale : 4;
+	uint8_t tcpi_delivery_rate_app_limited : 1;
 	uint32_t tcpi_rto;
 	uint32_t tcpi_ato;
 	uint32_t tcpi_snd_mss;
@@ -164,17 +181,33 @@ struct tcp_info
 	uint32_t tcpi_total_retrans;
 	uint64_t tcpi_pacing_rate;
 	uint64_t tcpi_max_pacing_rate;
+	uint64_t tcpi_bytes_acked;
+	uint64_t tcpi_bytes_received;
+	uint32_t tcpi_segs_out;
+	uint32_t tcpi_segs_in;
+	uint32_t tcpi_notsent_bytes;
+	uint32_t tcpi_min_rtt;
+	uint32_t tcpi_data_segs_in;
+	uint32_t tcpi_data_segs_out;
+	uint64_t tcpi_delivery_rate;
 };
 
 #define TCP_MD5SIG_MAXKEYLEN    80
 
-struct tcp_md5sig
-{
+struct tcp_md5sig {
 	struct sockaddr_storage tcpm_addr;
 	uint16_t __tcpm_pad1;
 	uint16_t tcpm_keylen;
 	uint32_t __tcpm_pad2;
 	uint8_t tcpm_key[TCP_MD5SIG_MAXKEYLEN];
+};
+
+struct tcp_repair_window {
+	uint32_t snd_wl1;
+	uint32_t snd_wnd;
+	uint32_t max_window;
+	uint32_t rcv_wnd;
+	uint32_t rcv_wup;
 };
 
 #endif
