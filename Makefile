@@ -50,14 +50,24 @@ CFLAGS += ${NK_CFLAGS}
 
 export CC CROSS_COMPILE CFLAGS
 
+configure_line := --srcdir=${SOURCE_DIR} --prefix=${STAGE_DIR} ${ENABLE_DEBUG} \
+        --target=${TARGET} --enable-warnings --disable-shared --enable-static
+
 build_muslc:
-	# muslc does not support out of tree builds, so step 1 is to copy the source
-	# into the build directory
-	cp -a $(SOURCE_DIR)/* .
-	# Configure muslc, using the non _sel4 arch. Send everything to /dev/null as it's a bit noisy
-	./configure --prefix=${STAGE_DIR} ${ENABLE_DEBUG} \
-    	--target=${TARGET} --enable-warnings --disable-shared --enable-static > /dev/null
-	# Now that configuration is done and flags have been set change the ARCH to the _sel4 one
-	sed -i 's/^ARCH = \(.*\)/ARCH = \1_sel4/' config.mak
+    # If the configure line changed and we've done a build (i.e. we have a makefile) then we should
+    # do a clean as muslc does not rebuild in the same directory correctly if you change the target
+    # or other major things
+	[ "`cat configure_line 2>&1`" != "${configure_line}" ] && [ -e Makefile.muslc ] && \
+		$(MAKE) CFLAGS="${CFLAGS}" CC="${CC}" CROSS_COMPILE="${CROSS_COMPILE}" -f Makefile.muslc clean || true
+
+	# If the configure line did change (or we don't have one yet) then we also need to (re)run configure
+	# Send everything to /dev/null though as configure is quite noisy
+	# Also need to update the ARCH in the config.mak file configure generates
+	[ "`cat configure_line 2>&1`" != "${configure_line}" ] && \
+		${SOURCE_DIR}/configure ${configure_line} && sed -i 's/^ARCH = \(.*\)/ARCH = \1_sel4/' config.mak || true
+	# Store the current configuration
+	echo "${configure_line}" > configure_line
+	# Symlink in the correct Makefile as the configure script doesn't know that we renamed the muslc one
+	[ -e Makefile.muslc ] || ln -s ${SOURCE_DIR}/Makefile.muslc Makefile.muslc
 	$(MAKE) CFLAGS="${CFLAGS}" CC="${CC}" CROSS_COMPILE="${CROSS_COMILE}" -f Makefile.muslc
 	$(MAKE) CFLAGS="${CFLAGS}" CC="${CC}" CROSS_COMPILE="${CROSS_COMILE}" -f Makefile.muslc install-libs install-headers
