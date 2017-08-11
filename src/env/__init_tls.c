@@ -30,6 +30,15 @@ static struct builtin_tls {
 
 static struct tls_module main_tls;
 
+size_t libc_get_tls_size()
+{
+    return libc.tls_size;
+}
+
+uintptr_t libc_tp_adj(uintptr_t ptr) {
+    return (uintptr_t)TP_ADJ(ptr);
+}
+
 void *__copy_tls(unsigned char *mem)
 {
 	pthread_t td;
