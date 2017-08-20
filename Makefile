@@ -20,7 +20,7 @@ all: build_muslc
 ifeq (${CONFIG_USER_DEBUG_BUILD},y)
     ENABLE_DEBUG = --enable-debug
 else
-	ENABLE_DEBUG =
+    ENABLE_DEBUG =
 endif
 
 ifeq (${CONFIG_ARCH_IA32},y)
