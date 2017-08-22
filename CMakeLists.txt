@@ -19,15 +19,15 @@ set(LIB_MUSLC_PARALLEL_BUILD true CACHE BOOL "Use `make -j` when building libmus
 # Construct the muslc version of our arch
 if(Kernel64)
     if(${KernelArch} STREQUAL "arm")
-        set(muslc_arch "aarch64_sel4")
+        set(muslc_arch "aarch64")
     else()
-        set(muslc_arch "x86_64_sel4")
+        set(muslc_arch "x86_64")
     endif()
 else()
     if(${KernelArch} STREQUAL "arm")
-        set(muslc_arch "arm_sel4")
+        set(muslc_arch "arm")
     else()
-        set(muslc_arch "i386_sel4")
+        set(muslc_arch "i386")
     endif()
 endif()
 
@@ -53,9 +53,7 @@ add_custom_command(
             TOOLPREFIX=${CROSS_COMPILER_PREFIX}
             # TODO: should also pass in the cflags for the CMAKE_BUILD_TYPE ?
             "NK_CFLAGS=${CMAKE_C_FLAGS}"
-            ARCH=${muslc_arch}
-            SUBARCH=
-            ASMSUBARCH= &&
+            TARGET=${muslc_arch} &&
         make -C build-temp ${parallel} -f "${CMAKE_CURRENT_SOURCE_DIR}/Makefile"
         "STAGE_DIR=${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage"
         "SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
