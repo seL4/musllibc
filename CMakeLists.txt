@@ -72,7 +72,7 @@ add_custom_target(muslc_gen
         "${CMAKE_BINARY_DIR}/lib/crti.o"
 )
 
-add_library(muslc_imported STATIC IMPORTED)
+add_library(muslc_imported STATIC IMPORTED GLOBAL)
 add_dependencies(muslc_imported muslc_gen)
 set_property(TARGET muslc_imported PROPERTY IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/build-temp/lib/libc.a")
 
