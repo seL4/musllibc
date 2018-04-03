@@ -39,6 +39,8 @@ ifeq (${CONFIG_ARCH_AARCH64},y)
     TARGET = aarch64
 endif
 
+TARGET = riscv
+
 ifeq (${CONFIG_LINK_TIME_OPTIMISATIONS},y)
     CFLAGS += -flto
 endif

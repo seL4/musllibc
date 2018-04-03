@@ -12,6 +12,10 @@ static int remap_rel(int type)
 	return 0;
 }
 
+#define CRTJMP(pc,sp) __asm__ __volatile__( \
+	".word 0x00000000" )
+
+
 #include "syscall.h"
 void __reloc_self(int c, size_t *a, size_t *dynv)
 {
