@@ -139,7 +139,6 @@ static inline void a_or_l(volatile void *p, long v)
 #define a_and_64 a_and_64
 static inline void a_and_64(volatile uint64_t *p, uint64_t v)
 {
-    uint64_t dest = *p;
     *p = *p & v;
 	//union { uint64_t v; uint32_t r[2]; } u = { v };
 	//a_and((int *)p, u.r[0]);
