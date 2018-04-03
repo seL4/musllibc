@@ -201,7 +201,7 @@ static char *fmt_u(uintmax_t x, char *s)
  * depends on the float.h constants being right. If they are wrong, it
  * may overflow the stack. */
 #if LDBL_MANT_DIG == 53
-//typedef char compiler_defines_long_double_incorrectly[9-(int)sizeof(long double)];
+typedef char compiler_defines_long_double_incorrectly[9-(int)sizeof(long double)];
 #endif
 
 static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t)
