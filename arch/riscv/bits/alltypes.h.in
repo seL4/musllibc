@@ -1,15 +1,13 @@
 #define _Addr long
-#define _Int64 long long
+#define _Int64 long
 #define _Reg long
 
 TYPEDEF __builtin_va_list va_list;
 TYPEDEF __builtin_va_list __isoc_va_list;
-typedef _Addr ptrdiff_t;
 
 #ifndef __cplusplus
-TYPEDEF unsigned wchar_t;
+TYPEDEF int wchar_t;
 #endif
-TYPEDEF unsigned wint_t;
 
 TYPEDEF float float_t;
 TYPEDEF double double_t;

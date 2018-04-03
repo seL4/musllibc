@@ -8,7 +8,6 @@
 #include <inttypes.h>
 #include <math.h>
 #include <float.h>
-#include <bits/alltypes.h>
 
 /* Some useful macros */
 
