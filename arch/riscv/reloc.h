@@ -4,4 +4,4 @@
 
 // Relocation is not currently supported for riscv
 #define CRTJMP(pc,sp) __asm__ __volatile__( \
-	".word 0x00000000" )
+	".word 0x00000000": : "r"(pc), "r"(sp) : "memory" )
