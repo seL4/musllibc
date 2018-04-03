@@ -1,1 +1,0 @@
---srcdir= --prefix=  --target=riscv --enable-warnings --disable-shared --enable-static
