@@ -70,9 +70,8 @@ static struct {
 
 static inline void lock(volatile int *lk)
 {
-	if (libc.threads_minus_1) {
+	if (libc.threads_minus_1)
 		while(a_swap(lk, 1)) __wait(lk, lk+1, 1, 1);
-    }
 }
 
 static inline void unlock(volatile int *lk)
@@ -97,7 +96,7 @@ static inline void unlock_bin(int i)
 
 static int first_set(uint64_t x)
 {
-#if 0 
+#if 1
 	return a_ctz_64(x);
 #else
 	static const char debruijn64[64] = {
