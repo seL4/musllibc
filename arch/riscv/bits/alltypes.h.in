@@ -1,8 +1,9 @@
-#define _Addr long
 
 #if __riscv_xlen == 32
+#define _Addr int
 #define _Int64 long long
 #else
+#define _Addr long
 #define _Int64 long
 #endif
 #define _Reg long
