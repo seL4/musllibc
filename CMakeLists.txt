@@ -56,12 +56,11 @@ add_custom_command(
     # we have no correctly captured the output files or dependencies
     COMMAND rm -r build-temp
     COMMAND mkdir -p build-temp
-    COMMAND
-        export
+    COMMAND ${CMAKE_COMMAND} -E env
             TOOLPREFIX=${CROSS_COMPILER_PREFIX}
             # TODO: should also pass in the cflags for the CMAKE_BUILD_TYPE ?
             "NK_CFLAGS=${CMAKE_C_FLAGS}"
-            TARGET=${muslc_arch} &&
+            TARGET=${muslc_arch}
         make -C build-temp ${parallel} -f "${CMAKE_CURRENT_SOURCE_DIR}/Makefile"
         "STAGE_DIR=${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage"
         "SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
