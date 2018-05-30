@@ -67,7 +67,6 @@ add_custom_command(
     COMMAND cp -a build-temp/lib/crt1.o "${CMAKE_BINARY_DIR}/lib/crt1.o"
     COMMAND cp -a build-temp/lib/crti.o "${CMAKE_BINARY_DIR}/lib/crti.o"
     COMMAND cp -a build-temp/lib/crtn.o "${CMAKE_BINARY_DIR}/lib/crtn.o"
-    VERBATIM
     DEPENDS ${deps}
     COMMENT "Invoking muslc build system"
 )
