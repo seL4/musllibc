@@ -46,6 +46,10 @@ if (LIB_MUSLC_PARALLEL_BUILD)
     set(parallel "-j")
 endif()
 
+# We make an attempt to extract compiler options from CMake
+get_property(compile_options DIRECTORY PROPERTY COMPILE_OPTIONS)
+separate_arguments(cmake_c_flags_sep NATIVE_COMMAND "${CMAKE_C_FLAGS}")
+list(APPEND compile_options "${cmake_c_flags_sep}")
 add_custom_command(
     OUTPUT
         build-temp/lib/libc.a
@@ -59,7 +63,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E env
             TOOLPREFIX=${CROSS_COMPILER_PREFIX}
             # TODO: should also pass in the cflags for the CMAKE_BUILD_TYPE ?
-            "NK_CFLAGS=${CMAKE_C_FLAGS}"
+            NK_CFLAGS="${compile_options}"
             TARGET=${muslc_arch}
         make -C build-temp ${parallel} -f "${CMAKE_CURRENT_SOURCE_DIR}/Makefile"
         "STAGE_DIR=${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage"
@@ -68,6 +72,7 @@ add_custom_command(
     COMMAND cp -a build-temp/lib/crti.o "${CMAKE_BINARY_DIR}/lib/crti.o"
     COMMAND cp -a build-temp/lib/crtn.o "${CMAKE_BINARY_DIR}/lib/crtn.o"
     DEPENDS ${deps}
+    COMMAND_EXPAND_LISTS
     COMMENT "Invoking muslc build system"
 )
 
