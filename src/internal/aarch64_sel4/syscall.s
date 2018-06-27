@@ -7,4 +7,4 @@ __syscall:
     br  x9
 
 .hidden __sysinfo
-1:  .word __sysinfo-1b
+1:  .dword __sysinfo-1b
