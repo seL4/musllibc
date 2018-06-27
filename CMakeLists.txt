@@ -39,7 +39,7 @@ else()
     endif()
 endif()
 
-file(GLOB_RECURSE deps **/*.c **/*.h **/*.S)
+file(GLOB_RECURSE deps **/*.c **/*.h **/*.S **/*.s)
 
 set(parallel "")
 if (LIB_MUSLC_PARALLEL_BUILD)
