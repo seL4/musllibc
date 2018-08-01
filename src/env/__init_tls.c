@@ -35,6 +35,23 @@ size_t libc_get_tls_size()
     return libc.tls_size;
 }
 
+int libc_set_threaded(void) {
+	/// Once set, does not get unset.
+	a_store(&libc.threaded, 1);
+}
+
+int libc_get_threads_minus_1(void) {
+	return libc.threads_minus_1;
+}
+
+int libc_inc_threads_minus_1(void) {
+	return a_fetch_add(&libc.threads_minus_1, 1);
+}
+
+int libc_dec_threads_minus_1(void) {
+	return a_fetch_add(&libc.threads_minus_1, -1);
+}
+
 uintptr_t libc_tp_adj(uintptr_t ptr) {
     return (uintptr_t)TP_ADJ(ptr);
 }
