@@ -81,9 +81,6 @@ list(APPEND compile_options "${cmake_c_flags_sep}")
 add_custom_command(
     OUTPUT
         build-temp/lib/libc.a
-        "${CMAKE_BINARY_DIR}/lib/crt1.o"
-        "${CMAKE_BINARY_DIR}/lib/crti.o"
-        "${CMAKE_BINARY_DIR}/lib/crtn.o"
         # If we have to rebuild, first clear the temporary build directory as
         # we have no correctly captured the output files or dependencies
     COMMAND rm -r build-temp
@@ -95,19 +92,13 @@ add_custom_command(
         "${CMAKE_CURRENT_SOURCE_DIR}/Makefile"
         "STAGE_DIR=${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage"
         "SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
-    COMMAND
-        cp -a build-temp/lib/crt1.o "${CMAKE_BINARY_DIR}/lib/crt1.o"
-    COMMAND
-        cp -a build-temp/lib/crti.o "${CMAKE_BINARY_DIR}/lib/crti.o"
-    COMMAND
-        cp -a build-temp/lib/crtn.o "${CMAKE_BINARY_DIR}/lib/crtn.o"
     DEPENDS ${deps} COMMAND_EXPAND_LISTS
     COMMENT "Invoking muslc build system"
 )
 
 add_custom_target(
-    muslc_gen
-    DEPENDS build-temp/lib/libc.a "${CMAKE_BINARY_DIR}/lib/crt1.o" "${CMAKE_BINARY_DIR}/lib/crti.o"
+	muslc_gen
+    DEPENDS build-temp/lib/libc.a
 )
 
 add_library(muslc_imported STATIC IMPORTED GLOBAL)
