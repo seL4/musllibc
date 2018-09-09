@@ -73,5 +73,5 @@ build_muslc:
 	echo "${configure_line}" > configure_line
 	# Symlink in the correct Makefile as the configure script doesn't know that we renamed the muslc one
 	[ -e Makefile.muslc ] || ln -s ${SOURCE_DIR}/Makefile.muslc Makefile.muslc
-	$(MAKE) CFLAGS="${CFLAGS}" CC="${CC}" CROSS_COMPILE="${CROSS_COMILE}" -f Makefile.muslc
-	$(MAKE) CFLAGS="${CFLAGS}" CC="${CC}" CROSS_COMPILE="${CROSS_COMILE}" -f Makefile.muslc install-libs install-headers
+	$(MAKE) CFLAGS="${CFLAGS}" CC="${CC}" CROSS_COMPILE="${CROSS_COMPILE}" -f Makefile.muslc
+	$(MAKE) CFLAGS="${CFLAGS}" CC="${CC}" CROSS_COMPILE="${CROSS_COMPILE}" -f Makefile.muslc install-libs install-headers
