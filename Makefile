@@ -68,7 +68,7 @@ build_muslc:
 	# Send everything to /dev/null though as configure is quite noisy
 	# Also need to update the ARCH in the config.mak file configure generates
 	[ "`cat configure_line 2>&1`" != "${configure_line}" ] && \
-		${SOURCE_DIR}/configure ${configure_line} && sed -i 's/^ARCH = \(.*\)/ARCH = \1_sel4/' config.mak || true
+		${SOURCE_DIR}/configure ${configure_line} && sed -i bak 's/^ARCH = \(.*\)/ARCH = \1_sel4/' config.mak || true
 	# Store the current configuration
 	echo "${configure_line}" > configure_line
 	# Symlink in the correct Makefile as the configure script doesn't know that we renamed the muslc one
