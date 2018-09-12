@@ -35,7 +35,7 @@ size_t libc_get_tls_size()
     return libc.tls_size;
 }
 
-int libc_set_threaded(void) {
+void libc_set_threaded(void) {
 	/// Once set, does not get unset.
 	a_store(&libc.threaded, 1);
 }
