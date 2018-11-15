@@ -50,6 +50,9 @@ endif()
 get_property(compile_options DIRECTORY PROPERTY COMPILE_OPTIONS)
 separate_arguments(cmake_c_flags_sep NATIVE_COMMAND "${CMAKE_C_FLAGS}")
 list(APPEND compile_options "${cmake_c_flags_sep}")
+if(ClangGccToolchain)
+    set(TOOLCHAIN clang-gcc)
+endif()
 add_custom_command(
     OUTPUT
         build-temp/lib/libc.a
@@ -62,6 +65,8 @@ add_custom_command(
     COMMAND mkdir -p build-temp
     COMMAND ${CMAKE_COMMAND} -E env
             TOOLPREFIX=${CROSS_COMPILER_PREFIX}
+            CMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+            TOOLCHAIN=${TOOLCHAIN}
             # TODO: should also pass in the cflags for the CMAKE_BUILD_TYPE ?
             NK_CFLAGS="${compile_options}"
             TARGET=${muslc_arch}

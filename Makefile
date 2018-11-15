@@ -48,7 +48,7 @@ ifeq (${CONFIG_LINK_TIME_OPTIMISATIONS},y)
 endif
 
 
-CC = ${TOOLPREFIX}gcc${TOOLSUFFIX}
+CC = $(CMAKE_C_COMPILER)
 CROSS_COMPILE = ${TOOLPREFIX}
 CFLAGS += ${NK_CFLAGS}
 
@@ -56,6 +56,10 @@ export CC CROSS_COMPILE CFLAGS
 
 configure_line := --srcdir=${SOURCE_DIR} --prefix=${STAGE_DIR} ${ENABLE_DEBUG} \
         --target=${TARGET} --enable-warnings --disable-shared --enable-static
+
+ifeq ($(TOOLCHAIN), clang-gcc)
+    configure_line += --enable-wrapper=clang
+endif
 
 build_muslc:
     # If the configure line changed and we've done a build (i.e. we have a makefile) then we should
