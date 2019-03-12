@@ -39,7 +39,14 @@ else()
     endif()
 endif()
 
-file(GLOB_RECURSE deps **/*.c **/*.h **/*.S **/*.s)
+set(LIB_MUSLC_GLOB_SOURCES OFF CACHE BOOL
+    "This flag causes CMake to add lots of source files to its dependency lists
+     which slows down its configuration times.
+     When not making changes in the musllibc directory, it is likely not necessary
+     to have this enabled.")
+if(LIB_MUSLC_GLOB_SOURCES)
+    file(GLOB_RECURSE deps **/*.c **/*.h **/*.S **/*.s)
+endif()
 
 set(parallel "")
 if (LIB_MUSLC_PARALLEL_BUILD)
