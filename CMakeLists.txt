@@ -46,6 +46,7 @@ set(
      When not making changes in the musllibc directory, it is likely not necessary
      to have this enabled."
 )
+mark_as_advanced(LIB_MUSLC_PARALLEL_BUILD LIB_MUSLC_GLOB_SOURCES)
 if(LIB_MUSLC_GLOB_SOURCES)
     file(
         GLOB_RECURSE
