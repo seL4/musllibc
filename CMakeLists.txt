@@ -39,17 +39,26 @@ else()
     endif()
 endif()
 
-set(LIB_MUSLC_GLOB_SOURCES OFF CACHE BOOL
-    "This flag causes CMake to add lots of source files to its dependency lists
+set(
+    LIB_MUSLC_GLOB_SOURCES OFF
+    CACHE BOOL "This flag causes CMake to add lots of source files to its dependency lists
      which slows down its configuration times.
      When not making changes in the musllibc directory, it is likely not necessary
-     to have this enabled.")
+     to have this enabled."
+)
 if(LIB_MUSLC_GLOB_SOURCES)
-    file(GLOB_RECURSE deps **/*.c **/*.h **/*.S **/*.s)
+    file(
+        GLOB_RECURSE
+            deps
+            **/*.c
+            **/*.h
+            **/*.S
+            **/*.s
+    )
 endif()
 
 set(parallel "")
-if (LIB_MUSLC_PARALLEL_BUILD)
+if(LIB_MUSLC_PARALLEL_BUILD)
     set(parallel "-j")
 endif()
 
@@ -63,36 +72,38 @@ add_custom_command(
         "${CMAKE_BINARY_DIR}/lib/crt1.o"
         "${CMAKE_BINARY_DIR}/lib/crti.o"
         "${CMAKE_BINARY_DIR}/lib/crtn.o"
-    # If we have to rebuild, first clear the temporary build directory as
-    # we have no correctly captured the output files or dependencies
+        # If we have to rebuild, first clear the temporary build directory as
+        # we have no correctly captured the output files or dependencies
     COMMAND rm -r build-temp
     COMMAND mkdir -p build-temp
-    COMMAND ${CMAKE_COMMAND} -E env
-            TOOLPREFIX=${CROSS_COMPILER_PREFIX}
-            # TODO: should also pass in the cflags for the CMAKE_BUILD_TYPE ?
-            NK_CFLAGS="${compile_options}"
-            TARGET=${muslc_arch}
-        make -C build-temp ${parallel} -f "${CMAKE_CURRENT_SOURCE_DIR}/Makefile"
+    COMMAND
+        ${CMAKE_COMMAND} -E env TOOLPREFIX=${CROSS_COMPILER_PREFIX}
+        # TODO: should also pass in the cflags for the CMAKE_BUILD_TYPE ?
+        NK_CFLAGS="${compile_options}" TARGET=${muslc_arch} make -C build-temp ${parallel} -f
+        "${CMAKE_CURRENT_SOURCE_DIR}/Makefile"
         "STAGE_DIR=${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage"
         "SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
-    COMMAND cp -a build-temp/lib/crt1.o "${CMAKE_BINARY_DIR}/lib/crt1.o"
-    COMMAND cp -a build-temp/lib/crti.o "${CMAKE_BINARY_DIR}/lib/crti.o"
-    COMMAND cp -a build-temp/lib/crtn.o "${CMAKE_BINARY_DIR}/lib/crtn.o"
-    DEPENDS ${deps}
-    COMMAND_EXPAND_LISTS
+    COMMAND
+        cp -a build-temp/lib/crt1.o "${CMAKE_BINARY_DIR}/lib/crt1.o"
+    COMMAND
+        cp -a build-temp/lib/crti.o "${CMAKE_BINARY_DIR}/lib/crti.o"
+    COMMAND
+        cp -a build-temp/lib/crtn.o "${CMAKE_BINARY_DIR}/lib/crtn.o"
+    DEPENDS ${deps} COMMAND_EXPAND_LISTS
     COMMENT "Invoking muslc build system"
 )
 
-add_custom_target(muslc_gen
-    DEPENDS
-        build-temp/lib/libc.a
-        "${CMAKE_BINARY_DIR}/lib/crt1.o"
-        "${CMAKE_BINARY_DIR}/lib/crti.o"
+add_custom_target(
+    muslc_gen
+    DEPENDS build-temp/lib/libc.a "${CMAKE_BINARY_DIR}/lib/crt1.o" "${CMAKE_BINARY_DIR}/lib/crti.o"
 )
 
 add_library(muslc_imported STATIC IMPORTED GLOBAL)
 add_dependencies(muslc_imported muslc_gen)
-set_property(TARGET muslc_imported PROPERTY IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/build-temp/lib/libc.a")
+set_property(
+    TARGET muslc_imported
+    PROPERTY IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/build-temp/lib/libc.a"
+)
 
 add_library(muslc INTERFACE)
 add_dependencies(muslc muslc_imported)
