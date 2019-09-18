@@ -22,10 +22,10 @@ macro(musllibc_set_environment_flags)
     set(CRTObjFiles "${CMAKE_BINARY_DIR}/lib/crt0.o ${CMAKE_BINARY_DIR}/lib/crti.o ${CRTBeginFile}")
     set(FinObjFiles "${CRTEndFile} ${CMAKE_BINARY_DIR}/lib/crtn.o")
 
-    # -lgcc has to be given twice since whilst normally it should be put at the end, we implement
-    # some libgcc dependencies in our libc
-    set(common_link_string "<LINK_FLAGS> ${CRTObjFiles} <OBJECTS> ${libgcc} <LINK_LIBRARIES> \
-        ${libgcc} <LINK_LIBRARIES> ${FinObjFiles} -o <TARGET>")
+    # libgcc has dependencies implemented by libc and so we use link groups to resolve these.
+    # This seems to be the same behaviour gcc has when building static binaries.
+    set(common_link_string "<LINK_FLAGS> ${CRTObjFiles} <OBJECTS> -Wl,--start-group \
+        ${libgcc} <LINK_LIBRARIES> -Wl,--end-group ${FinObjFiles} -o <TARGET>")
     set(
         CMAKE_C_LINK_EXECUTABLE
         "<CMAKE_C_COMPILER>  <FLAGS> <CMAKE_C_LINK_FLAGS> ${common_link_string}"
