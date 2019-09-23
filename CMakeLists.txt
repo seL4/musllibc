@@ -88,6 +88,9 @@ add_custom_command(
     COMMAND
         ${CMAKE_COMMAND} -E env TOOLPREFIX=${CROSS_COMPILER_PREFIX}
         # TODO: should also pass in the cflags for the CMAKE_BUILD_TYPE ?
+        # Suppress make output by default. Verbose make output can now be achieved
+        # by MAKEFLAGS=V3 ninja (${MAKEFLAGS:--s} expands to -s if MAKEFLAGS is unset).
+        "MAKEFLAGS=\$\${MAKEFLAGS:--s}"
         NK_CFLAGS="${compile_options}" TARGET=${muslc_arch} make -C build-temp ${parallel} -f
         "${CMAKE_CURRENT_SOURCE_DIR}/Makefile"
         "STAGE_DIR=${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage"
