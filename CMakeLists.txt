@@ -80,7 +80,7 @@ separate_arguments(cmake_c_flags_sep NATIVE_COMMAND "${CMAKE_C_FLAGS}")
 list(APPEND compile_options "${cmake_c_flags_sep}")
 add_custom_command(
     OUTPUT
-        build-temp/lib/libc.a
+        build-temp/stage/lib/libc.a
         # If we have to rebuild, first clear the temporary build directory as
         # we have no correctly captured the output files or dependencies
     COMMAND rm -r build-temp
@@ -101,14 +101,14 @@ add_custom_command(
 
 add_custom_target(
 	muslc_gen
-    DEPENDS build-temp/lib/libc.a
+    DEPENDS build-temp/stage/lib/libc.a
 )
 
 add_library(muslc_imported STATIC IMPORTED GLOBAL)
 add_dependencies(muslc_imported muslc_gen)
 set_property(
     TARGET muslc_imported
-    PROPERTY IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/build-temp/lib/libc.a"
+    PROPERTY IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage/lib/libc.a"
 )
 
 add_library(muslc INTERFACE)
