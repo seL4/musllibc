@@ -82,7 +82,7 @@ list(APPEND compile_options "${cmake_c_flags_sep}")
 include(memoize)
 # memoize this installation rule which will save the resulting artifact in a cache and reuse it across builds.
 # This will rebuild from source if the git directory has changes or has a changed commit hash.
-memoize_add_custom_command(musllibc "${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage" "${CMAKE_CURRENT_SOURCE_DIR}" "${extra_arguments} ${muslc_arch}" ""
+memoize_add_custom_command(musllibc "${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage" "${CMAKE_CURRENT_SOURCE_DIR}" "${compile_options} ${muslc_arch}" ""
     OUTPUT
         build-temp/stage/lib/libc.a
         # If we have to rebuild, first clear the temporary build directory as
