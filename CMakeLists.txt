@@ -94,6 +94,7 @@ memoize_add_custom_command(musllibc "${CMAKE_CURRENT_BINARY_DIR}/build-temp/stag
         # TODO: should also pass in the cflags for the CMAKE_BUILD_TYPE ?
         # Suppress make output by default. Verbose make output can now be achieved
         # by MAKEFLAGS=V3 ninja (${MAKEFLAGS:--s} expands to -s if MAKEFLAGS is unset).
+        C_COMPILER=${C_COMPILER}
         "MAKEFLAGS=\$\${MAKEFLAGS:--s}"
         NK_CFLAGS="${compile_options}" TARGET=${muslc_arch} make -C build-temp ${parallel} -f
         "${CMAKE_CURRENT_SOURCE_DIR}/Makefile"
