@@ -79,6 +79,12 @@ get_property(compile_options DIRECTORY PROPERTY COMPILE_OPTIONS)
 separate_arguments(cmake_c_flags_sep NATIVE_COMMAND "${CMAKE_C_FLAGS}")
 list(APPEND compile_options "${cmake_c_flags_sep}")
 
+# Add the target triple to the compile flags if we are using clang
+# It is not part of the CMAKE_C_FLAGS variable
+if (CMAKE_C_COMPILER_ID STREQUAL "Clang")
+    list(APPEND compile_options "${CMAKE_C_COMPILE_OPTIONS_TARGET}${CMAKE_C_COMPILER_TARGET}")
+endif()
+
 include(memoize)
 # memoize this installation rule which will save the resulting artifact in a cache and reuse it across builds.
 # This will rebuild from source if the git directory has changes or has a changed commit hash.
@@ -105,7 +111,7 @@ memoize_add_custom_command(musllibc "${CMAKE_CURRENT_BINARY_DIR}/build-temp/stag
 )
 
 add_custom_target(
-	muslc_gen
+    muslc_gen
     DEPENDS build-temp/stage/lib/libc.a
 )
 
