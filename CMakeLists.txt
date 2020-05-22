@@ -76,7 +76,11 @@ endif()
 
 # We make an attempt to extract compiler options from CMake
 get_property(compile_options DIRECTORY PROPERTY COMPILE_OPTIONS)
-separate_arguments(cmake_c_flags_sep NATIVE_COMMAND "${CMAKE_C_FLAGS}")
+if(${KernelArch} STREQUAL "x86")
+    separate_arguments(cmake_c_flags_sep NATIVE_COMMAND "${CMAKE_C_FLAGS};${CMAKE_C_FLAGS_RELEASE}")
+else()
+    separate_arguments(cmake_c_flags_sep NATIVE_COMMAND "${CMAKE_C_FLAGS}")
+endif()
 list(APPEND compile_options "${cmake_c_flags_sep}")
 
 # Add the target triple to the compile flags if we are using clang
