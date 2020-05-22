@@ -76,7 +76,14 @@ endif()
 
 # We make an attempt to extract compiler options from CMake
 get_property(compile_options DIRECTORY PROPERTY COMPILE_OPTIONS)
-separate_arguments(cmake_c_flags_sep NATIVE_COMMAND "${CMAKE_C_FLAGS}")
+
+# Also inherit the CMAKE build type flags from one of the following variables depending on
+# the configured build type:
+# CMAKE_C_FLAGS_DEBUG, CMAKE_C_FLAGS_RELEASE, CMAKE_C_FLAGS_RELWITHDEBINFO, CMAKE_C_FLAGS_MINSIZEREL
+string(TOUPPER CMAKE_BUILD_TYPE build_type)
+set(cmake_built_type_config_name CMAKE_C_FLAGS_${build_type})
+separate_arguments(cmake_c_flags_sep NATIVE_COMMAND "${CMAKE_C_FLAGS};${${cmake_built_type_config_name}}")
+
 list(APPEND compile_options "${cmake_c_flags_sep}")
 
 # Add the target triple to the compile flags if we are using clang
