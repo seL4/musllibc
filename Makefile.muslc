@@ -93,8 +93,8 @@ $(ALL_LIBS) $(ALL_TOOLS) $(ALL_OBJS) $(ALL_OBJS:%.o=%.lo) $(GENH) $(GENH_INT): |
 $(OBJ_DIRS):
 	mkdir -p $@
 
-obj/include/bits/alltypes.h: $(srcdir)/arch/$(ARCH)/bits/alltypes.h.in $(srcdir)/include/alltypes.h.in $(srcdir)/tools/mkalltypes.sed
-	sed -f $(srcdir)/tools/mkalltypes.sed $(srcdir)/arch/$(ARCH)/bits/alltypes.h.in $(srcdir)/include/alltypes.h.in > $@
+obj/include/bits/alltypes.h: $(srcdir)/tools/mkalltypes.sed $(srcdir)/arch/$(ARCH)/bits/alltypes.h.in $(srcdir)/include/alltypes.h.in
+	$(srcdir)/tools/mkalltypes $@ $^
 
 obj/include/bits/syscall.h: $(srcdir)/arch/$(ARCH)/bits/syscall.h.in
 	cp $< $@
