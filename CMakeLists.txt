@@ -16,28 +16,30 @@ project(libmuslc NONE)
 
 set(LIB_MUSLC_PARALLEL_BUILD true CACHE BOOL "Use `make -j` when building libmuslc")
 
-# Construct the muslc version of our arch
-if(Kernel64)
-    if(${KernelArch} STREQUAL "arm")
-        set(muslc_arch "aarch64")
-    endif()
-    if(${KernelArch} STREQUAL "x86")
-        set(muslc_arch "x86_64")
-    endif()
-    if(${KernelArch} STREQUAL "riscv")
-        set(muslc_arch "riscv")
-    endif()
+# Map KernelSel4Arch to muslc architecture.
+set(
+    arch_mapping # element format: "KernelSel4Arch[:muslc_arch]"
+    "ia32:i386"
+    "x86_64" # use KernelSel4Arch
+    "aarch32:arm"
+    "arm_hyp:arm" # arm_hyp is legacy hack that might get removed one day
+    "aarch64" # use KernelSel4Arch
+    "riscv32:riscv" # no difference between 32/64 bit
+    "riscv64:riscv" # no difference between 32/64 bit
+)
+# Find the tuple with the mapping information. If KernelSel4Arch is not set at
+# all, matching will fail.
+if(NOT ";${arch_mapping};" MATCHES ";${KernelSel4Arch}(:([^;]*))?;")
+    message(FATAL_ERROR "unsupported KernelSel4Arch: '${KernelSel4Arch}'")
+elseif(CMAKE_MATCH_2)
+    set(muslc_arch "${CMAKE_MATCH_2}")
 else()
-    if(${KernelArch} STREQUAL "arm")
-        set(muslc_arch "arm")
-    endif()
-    if(${KernelArch} STREQUAL "x86")
-        set(muslc_arch "i386")
-    endif()
-    if(${KernelArch} STREQUAL "riscv")
-        set(muslc_arch "riscv")
-    endif()
+    set(muslc_arch "${KernelSel4Arch}")
 endif()
+
+message(
+    STATUS "${PROJECT_NAME} architecture: '${muslc_arch}' (from KernelSel4Arch '${KernelSel4Arch}')"
+)
 
 set(
     LIB_MUSLC_GLOB_SOURCES OFF
