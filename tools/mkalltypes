@@ -1,0 +1,38 @@
+#!/bin/sh -ue
+
+OUT_FILE=$1
+SED_FILE=$2
+shift 2
+
+cat <<EOF >${OUT_FILE}
+//
+// Auto-generated file, DO NOT EDIT!
+//
+// There is no "#pragma once" here on purpose, as the contents of this file are
+// needed every time it is included.
+//
+
+EOF
+
+
+for f in "$@"; do
+
+    cat <<EOF >>${OUT_FILE}
+
+//==============================================================================
+// start ${f}
+//------------------------------------------------------------------------------
+
+EOF
+
+    sed -f ${SED_FILE} ${f} >>${OUT_FILE}
+
+    cat <<EOF >>${OUT_FILE}
+
+//------------------------------------------------------------------------------
+// end ${f}
+//==============================================================================
+
+EOF
+
+done
