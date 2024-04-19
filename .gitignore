@@ -6,3 +6,4 @@
 config.mak
 lib/musl-gcc.specs
 /obj/
+build/
