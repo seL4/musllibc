@@ -23,6 +23,9 @@
 #include "fork_impl.h"
 #include "dynlink.h"
 
+// fzakaria: Used for timing information
+#include <time.h>
+
 static size_t ldso_page_size;
 #ifndef PAGE_SIZE
 #define PAGE_SIZE ldso_page_size
@@ -394,6 +397,18 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 	size_t addend;
 	int skip_relative = 0, reuse_addends = 0, save_slot = 0;
 
+	clock_t start_time;
+	clock_t end_time;
+	double elapsed_time;
+
+	dprintf(2, "Performing relocations for %s\n", dso->name);
+
+	// fzakaria: If we are doing relocs for libc
+	// We can't even call this function!
+	if (dso != &ldso) {
+		start_time = clock();
+	}
+
 	if (dso == &ldso) {
 		/* Only ldso's REL table needs addend saving/reuse. */
 		if (rel == apply_addends_to)
@@ -554,6 +569,12 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 			if (runtime) longjmp(*rtld_fail, 1);
 			continue;
 		}
+	}
+
+	if (dso != &ldso) {
+		end_time = clock();
+    	elapsed_time = (double)(end_time - start_time) / CLOCKS_PER_SEC;
+    	dprintf(2, "do_relocs execution time: %lf seconds\n", elapsed_time);
 	}
 }
 
