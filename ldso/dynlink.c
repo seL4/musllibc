@@ -57,6 +57,9 @@ static int stage_complete = 0;
  */
 static inline void debug_print(const char *format, ...) {
     static volatile int debug_env_exists = -1;
+	// Guard against prior to stage 2 since
+	// getenv is not available before stage 2
+	// as libc itself needs to be relocated
     if (stage_complete >= 2 && debug_env_exists == -1) {
         debug_env_exists = getenv("DEBUG") != NULL;
     }
