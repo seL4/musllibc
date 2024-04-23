@@ -48,6 +48,26 @@ static void (*error)(const char *, ...) = error_noop;
 #define container_of(p,t,m) ((t*)((char *)(p)-offsetof(t,m)))
 #define countof(a) ((sizeof (a))/(sizeof (a)[0]))
 
+static int stage_complete = 0;
+/**
+ * Prints debug messages to stderr if the DEBUG environment
+ * variable is set.
+ * Does not care what the DEBUG environment variable is set
+ * to. Message is printed to stderr.
+ */
+static inline void debug_print(const char *format, ...) {
+    static volatile int debug_env_exists = -1;
+    if (stage_complete >= 2 && debug_env_exists == -1) {
+        debug_env_exists = getenv("DEBUG") != NULL;
+    }
+    if (debug_env_exists == 1) {
+        va_list args;
+        va_start(args, format);
+        vdprintf(2, format, args);
+        va_end(args);
+    }
+}
+
 struct debug {
 	int ver;
 	void *head;
@@ -264,6 +284,7 @@ static Sym *gnu_lookup_filtered(uint32_t h1, uint32_t *hashtab, struct dso *dso,
 #define ARCH_SYM_REJECT_UND(s) 0
 #endif
 
+
 #if defined(__GNUC__)
 __attribute__((always_inline))
 #endif
@@ -359,7 +380,7 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 	double elapsed_time = 0.0;  // Total execution time for do_relocs
     double find_sym_total_time = 0.0;  // Total time spent in find_sym
 
-	dprintf(2, "Performing relocations for %s\n", dso->name);
+	debug_print("Performing relocations for %s\n", dso->name);
 
 	// fzakaria: If we are doing relocs for libc
 	// We can't even call this function!
@@ -549,8 +570,8 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 	if (dso != &ldso) {
 		end_time = clock();
     	elapsed_time = (double)(end_time - start_time) / CLOCKS_PER_SEC;
-    	dprintf(2, "do_relocs execution time: %lf seconds\n", elapsed_time);
-		dprintf(2, "Total find_sym time in do_relocs: %lf seconds\n", find_sym_total_time);
+    	debug_print("do_relocs execution time: %lf seconds\n", elapsed_time);
+		debug_print("Total find_sym time in do_relocs: %lf seconds\n", find_sym_total_time);
 	}
 }
 
@@ -1683,6 +1704,10 @@ void __dls2b(size_t *sp, size_t *auxv)
 	if (__init_tp(__copy_tls((void *)builtin_tls)) < 0) {
 		a_crash();
 	}
+
+	// let's mark where we are for guarding
+	// against requirements for setup
+	stage_complete = 2;
 
 	struct symdef dls3_def = find_sym(&ldso, "__dls3", 0);
 	((stage3_func)laddr(&ldso, dls3_def.sym->st_value))(sp, auxv);
