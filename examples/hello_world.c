@@ -1,12 +1,15 @@
 #include <stdio.h>
 #include <dlfcn.h>
 
+extern void foo();
+
 void my_function() {
     printf("This is my_function.\n");
 }
 
 int main() {
     printf("Hello, World!\n");
+    foo();
 
     Dl_info info;
 
