@@ -48,6 +48,23 @@ static void (*error)(const char *, ...) = error_noop;
 #define container_of(p,t,m) ((t*)((char *)(p)-offsetof(t,m)))
 #define countof(a) ((sizeof (a))/(sizeof (a)[0]))
 
+
+/**
+ * This struct explores the possibility of caching the DSO name and the
+ * st_value of the symbol that was found in that DSO name.
+ * The dso_name is needed to get the base address to recompute the
+ * relocation due to ASLR.
+ */
+typedef struct {
+	int type; 		   	  	  // Type of the relocation
+    size_t st_value;      	  // Symbol value
+    size_t offset; 		  	  // Offset of the relocation
+	char dso_name[255];       // Name of the DSO
+} CachedRelocInfo;
+
+// Variable that holds which stage we've completed/
+// Can be used to guard against operations that require
+// libc to be fully relocated which is done after stage2.
 static int stage_complete = 0;
 /**
  * Prints debug messages to stderr if the DEBUG environment
@@ -361,7 +378,21 @@ nomatch:
 	return (struct symdef){ 0 };
 }
 
-static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stride)
+void* custom_alloc(int fd, size_t size) {
+	if (size == 0) {
+		return NULL;
+	}
+    void* ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (ptr == MAP_FAILED) {
+        int err = errno;
+        debug_print("mmap failed: %s\n", strerror(err));
+        return NULL;
+    }
+
+    return ptr;
+}
+
+static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stride, CachedRelocInfo * cached_reloc_infos, size_t * reloc_count)
 {
 	unsigned char *base = dso->base;
 	Sym *syms = dso->syms;
@@ -397,6 +428,11 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 			reuse_addends = 1;
 		skip_relative = 1;
 	}
+
+
+	// Calculate the number of relocations
+	size_t num_relocs = rel_size / (stride * sizeof(size_t));
+	debug_print("Expected number of relocations: %zu\n", num_relocs);
 
 	for (; rel_size; rel+=stride, rel_size-=stride*sizeof(size_t)) {
 		clock_t find_sym_start, find_sym_end;
@@ -434,6 +470,8 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 				find_sym_start = clock();
 			}
 
+			debug_print("Looking for symbol %s\n", name);
+
 			def = (sym->st_info>>4) == STB_LOCAL
 				? (struct symdef){ .dso = dso, .sym = sym }
 				: find_sym(ctx, name, type==REL_PLT);
@@ -459,6 +497,16 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 				if (runtime) longjmp(*rtld_fail, 1);
 				continue;
 			}
+
+			// Store relocation info
+			if (cached_reloc_infos != NULL) {
+				cached_reloc_infos[*reloc_count].type = R_TYPE(rel[1]);
+				cached_reloc_infos[*reloc_count].st_value = def.sym ? def.sym->st_value : 0;
+				strcpy(cached_reloc_infos[*reloc_count].dso_name, def.dso ? def.dso->name : "");
+				cached_reloc_infos[*reloc_count].offset = rel[0];
+				(*reloc_count)++;
+			}
+
 		} else {
 			sym = 0;
 			def.sym = 0;
@@ -581,6 +629,11 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 static void do_relr_relocs(struct dso *dso, size_t *relr, size_t relr_size)
 {
 	if (dso == &ldso) return; /* self-relocation was done in _dlstart */
+	
+	// Calculate the number of relocations
+	size_t num_relocs = relr_size / sizeof(size_t);
+	printf("Expected number of relr_relocs: %zu\n", num_relocs);
+
 	unsigned char *base = dso->base;
 	size_t *reloc_addr;
 	for (; relr_size; relr++, relr_size-=sizeof(size_t))
@@ -604,7 +657,7 @@ static void redo_lazy_relocs()
 		next = p->lazy_next;
 		size_t size = p->lazy_cnt*3*sizeof(size_t);
 		p->lazy_cnt = 0;
-		do_relocs(p, p->lazy, size, 3);
+		do_relocs(p, p->lazy, size, 3, NULL, NULL);
 		if (p->lazy_cnt) {
 			p->lazy_next = lazy_head;
 			lazy_head = p;
@@ -1341,11 +1394,26 @@ static void do_mips_relocs(struct dso *p, size_t *got)
 	rel[0] = (unsigned char *)got - base;
 	for (i-=j; i; i--, sym++, rel[0]+=sizeof(size_t)) {
 		rel[1] = R_INFO(sym-p->syms, R_MIPS_JUMP_SLOT);
-		do_relocs(p, rel, sizeof rel, 2);
+		do_relocs(p, rel, sizeof rel, 2, NULL, NULL);
 	}
 }
 
-static void reloc_all(struct dso *p)
+static size_t total_relocs(struct dso *p) {
+	size_t dyn[DYN_CNT];
+	size_t total_size = 0;
+	
+	for (; p; p=p->next) {
+		decode_vec(p->dynv, dyn, DYN_CNT);
+		size_t total_dso_size = (dyn[DT_PLTRELSZ] / ((2+(dyn[DT_PLTREL]==DT_RELA)) * sizeof(size_t)) ) +
+							    (dyn[DT_RELSZ] / (2 * sizeof(size_t))) +
+								(dyn[DT_RELASZ] / (3 * sizeof(size_t))) +
+								(dyn[DT_RELRSZ] / sizeof(size_t));
+		total_size += total_dso_size;
+	}
+	return total_size;
+}
+
+static void reloc_all(struct dso *p, CachedRelocInfo * cached_reloc_infos, size_t * reloc_count)
 {
 	size_t dyn[DYN_CNT];
 	for (; p; p=p->next) {
@@ -1353,10 +1421,15 @@ static void reloc_all(struct dso *p)
 		decode_vec(p->dynv, dyn, DYN_CNT);
 		if (NEED_MIPS_GOT_RELOCS)
 			do_mips_relocs(p, laddr(p, dyn[DT_PLTGOT]));
+
+		debug_print("About to start DT_JMPREL relocations for %s\n", p->name);
 		do_relocs(p, laddr(p, dyn[DT_JMPREL]), dyn[DT_PLTRELSZ],
-			2+(dyn[DT_PLTREL]==DT_RELA));
-		do_relocs(p, laddr(p, dyn[DT_REL]), dyn[DT_RELSZ], 2);
-		do_relocs(p, laddr(p, dyn[DT_RELA]), dyn[DT_RELASZ], 3);
+			2+(dyn[DT_PLTREL]==DT_RELA), cached_reloc_infos, reloc_count);
+		debug_print("About to start DT_REL relocations for %s\n", p->name);
+		do_relocs(p, laddr(p, dyn[DT_REL]), dyn[DT_RELSZ], 2, cached_reloc_infos, reloc_count);
+		debug_print("About to start DT_RELA relocations for %s\n", p->name);
+		do_relocs(p, laddr(p, dyn[DT_RELA]), dyn[DT_RELASZ], 3, cached_reloc_infos, reloc_count);
+		debug_print("About to start DT_RELR relocations for %s\n", p->name);
 		do_relr_relocs(p, laddr(p, dyn[DT_RELR]), dyn[DT_RELRSZ]);
 
 		if (head != &ldso && p->relro_start != p->relro_end) {
@@ -1678,7 +1751,8 @@ hidden void __dls2(unsigned char *base, size_t *sp)
 	saved_addends = addends;
 
 	head = &ldso;
-	reloc_all(&ldso);
+
+	reloc_all(&ldso, NULL, NULL);
 
 	ldso.relocated = 0;
 
@@ -1935,10 +2009,36 @@ void __dls3(size_t *sp, size_t *auxv)
 	}
 	static_tls_cnt = tls_cnt;
 
+	size_t num_relocs = total_relocs(&app);
+	debug_print("Total relocations: %zu\n", num_relocs);
+
+	int cache_fd = open("relo.bin", O_CREAT | O_RDWR | O_APPEND | O_TRUNC, S_IRUSR | S_IWUSR);
+	if (cache_fd == -1) {
+		int err = errno;
+		debug_print("Failed to open cache file: %s\n", strerror(err));
+		if (runtime) longjmp(*rtld_fail, 1);
+		return;
+	}
+	
+	size_t file_cache_size = num_relocs * sizeof(CachedRelocInfo);
+	ftruncate(cache_fd, file_cache_size);
+	// To keep track of how many relocations we store
+	size_t reloc_count = 0;
+	CachedRelocInfo *cached_reloc_infos = custom_alloc(cache_fd, file_cache_size);
+	if (num_relocs > 0 && !cached_reloc_infos) {
+		error("Failed to allocate memory for cached relocation infos.\n");
+		if (runtime) longjmp(*rtld_fail, 1);
+		return;
+	}
+
 	/* The main program must be relocated LAST since it may contain
 	 * copy relocations which depend on libraries' relocations. */
-	reloc_all(app.next);
-	reloc_all(&app);
+	reloc_all(app.next, cached_reloc_infos, &reloc_count);
+	reloc_all(&app, cached_reloc_infos, &reloc_count);
+
+	// Cleanup
+	munmap(cached_reloc_infos, num_relocs * sizeof(CachedRelocInfo));
+	close(cache_fd);
 
 	/* Actual copying to new TLS needs to happen after relocations,
 	 * since the TLS images might have contained relocated addresses. */
@@ -2105,7 +2205,7 @@ void *dlopen(const char *file, int mode)
 			add_syms(p->deps[i]);
 	}
 	if (!p->relocated) {
-		reloc_all(p);
+		reloc_all(p, NULL, NULL);
 	}
 
 	/* If RTLD_GLOBAL was not specified, undo any new additions

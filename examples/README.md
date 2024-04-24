@@ -13,7 +13,8 @@ Compile musl and install it
             --exec-prefix=$(realpath build) \
             --syslibdir=$(realpath build/lib/) \
             --host=x86_64-linux-gnu \
-            --enable-debug
+            --enable-debug \
+            --disable-optimize
 
 make && make install
 ```
