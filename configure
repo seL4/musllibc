@@ -445,6 +445,7 @@ xno|x) printf "disabled\n" ; optimize=no ;;
 esac
 
 if test "$optimize" = no ; then :
+tryflag CFLAGS_AUTO -fno-omit-frame-pointer
 else
 tryflag CFLAGS_AUTO -O2
 tryflag CFLAGS_AUTO -fno-align-jumps
