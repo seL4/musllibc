@@ -57,7 +57,7 @@ def benchmark_loading(binary_name: str) -> float:
 
 data = {"Number of Functions": [], "Load Time": []}
 
-for exponent in range(1, 6):
+for exponent in range(1, 7):
     num_functions = 10 ** exponent
     data["Number of Functions"].append(num_functions)
 
