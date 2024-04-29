@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -7,12 +8,13 @@
 namespace fs = std::filesystem;
 
 // This should be in sync with what's in dynlink.c
-struct CachedRelocInfo {
-    int type;           // Type of the relocation
-    size_t st_value;    // Symbol value
-    size_t offset;      // Offset of the relocation
-    char dso_name[255]; // Name of the DSO
-};
+typedef struct {
+	int type; 		   	  	  		 // Type of the relocation
+    size_t st_value;      	  		 // Symbol value
+    size_t offset; 		  	  		 // Offset of the relocation
+	char symbol_dso_name[255];       // Name of the DSO
+	char dso_name[255];       		 // Name of the DSO
+} CachedRelocInfo;
 
 std::vector<CachedRelocInfo> read_cached_relocs(const std::string& filename) {
     std::ifstream file(filename, std::ios::binary);
@@ -39,7 +41,8 @@ std::vector<CachedRelocInfo> read_cached_relocs(const std::string& filename) {
 void print_reloc_info(const CachedRelocInfo& reloc) {
     std::cout << "Type: " << reloc.type << ", "
               << "Symbol Value: " << reloc.st_value << ", "
-              << "Offset: " << reloc.offset << ", "
+              << "Symbol DSO Name: " << reloc.symbol_dso_name << ", "
+              << "Relocation Offset: " << reloc.offset << ", "
               << "DSO Name: " << reloc.dso_name << '\n';
 }
 
