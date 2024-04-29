@@ -42,10 +42,40 @@ static void error_impl(const char *, ...);
 static void error_noop(const char *, ...);
 static void (*error)(const char *, ...) = error_noop;
 
+/**
+ * Macro to calculate the maximum power of 2 between two values.
+ *
+ * @param a The first value.
+ * @param b The second value.
+ * @return The maximum power of 2 between the two values.
+ */
 #define MAXP2(a,b) (-(-(a)&-(b)))
+
+/**
+ * Macro to align a value to the nearest multiple of another value.
+ *
+ * @param x The value to be aligned.
+ * @param y The alignment value.
+ * @return The aligned value.
+ */
 #define ALIGN(x,y) ((x)+(y)-1 & -(y))
 
+/**
+ * Macro to get the container structure from a pointer to a member of that structure.
+ *
+ * @param p The pointer to the member.
+ * @param t The type of the container structure.
+ * @param m The name of the member within the container structure.
+ * @return A pointer to the container structure.
+ */
 #define container_of(p,t,m) ((t*)((char *)(p)-offsetof(t,m)))
+
+/**
+ * Macro to calculate the number of elements in an array.
+ *
+ * @param a The array.
+ * @return The number of elements in the array.
+ */
 #define countof(a) ((sizeof (a))/(sizeof (a)[0]))
 
 
@@ -56,10 +86,11 @@ static void (*error)(const char *, ...) = error_noop;
  * relocation due to ASLR.
  */
 typedef struct {
-	int type; 		   	  	  // Type of the relocation
-    size_t st_value;      	  // Symbol value
-    size_t offset; 		  	  // Offset of the relocation
-	char dso_name[255];       // Name of the DSO
+	int type; 		   	  	  		 // Type of the relocation
+    size_t st_value;      	  		 // Symbol value
+    size_t offset; 		  	  		 // Offset of the relocation
+	char symbol_dso_name[255];       // Name of the DSO
+	char dso_name[255];       		 // Name of the DSO
 } CachedRelocInfo;
 
 // Variable that holds which stage we've completed/
@@ -470,7 +501,7 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 				find_sym_start = clock();
 			}
 
-			debug_print("Looking for symbol %s\n", name);
+			// debug_print("Looking for symbol %s\n", name);
 
 			def = (sym->st_info>>4) == STB_LOCAL
 				? (struct symdef){ .dso = dso, .sym = sym }
@@ -502,7 +533,8 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 			if (cached_reloc_infos != NULL) {
 				cached_reloc_infos[*reloc_count].type = R_TYPE(rel[1]);
 				cached_reloc_infos[*reloc_count].st_value = def.sym ? def.sym->st_value : 0;
-				strcpy(cached_reloc_infos[*reloc_count].dso_name, def.dso ? def.dso->name : "");
+				strcpy(cached_reloc_infos[*reloc_count].dso_name, dso->name);
+				strcpy(cached_reloc_infos[*reloc_count].symbol_dso_name, def.dso ? def.dso->name : "");
 				cached_reloc_infos[*reloc_count].offset = rel[0];
 				(*reloc_count)++;
 			}
