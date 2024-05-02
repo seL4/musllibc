@@ -119,6 +119,22 @@ static inline void debug_print(const char *format, ...) {
     }
 }
 
+static inline int is_reloc_write() {
+	static volatile int reloc_write_env_exists = -1;
+	if (reloc_write_env_exists == -1) {
+		reloc_write_env_exists = getenv("RELOC_WRITE") != NULL;
+	}
+	return reloc_write_env_exists;
+}
+
+static inline int is_reloc_read() {
+	static volatile int reloc_read_env_exists = -1;
+	if (reloc_read_env_exists == -1) {
+		reloc_read_env_exists = getenv("RELOC_READ") != NULL;
+	}
+	return reloc_read_env_exists;
+}
+
 struct debug {
 	int ver;
 	void *head;
@@ -1445,6 +1461,46 @@ static size_t total_relocs(struct dso *p) {
 	return total_size;
 }
 
+static CachedRelocInfo* load_relo_cache(struct dso *app, size_t *num_relocs) {
+	/**
+	 * This is the code necessary to read the sqlite section in the ELF file.
+	 * We have to re-open the file because the section is not in a loadable segment.
+	 */
+	int fd = open(app->name, O_RDONLY);
+	if (fd < 0) {
+		dprintf(2, "failed to open %s", app->name);
+		_exit(1);
+	}
+
+	/**
+	 * Figure out the size of the file so that we can mmap it.
+	 */
+	struct stat st;
+	fstat(fd, &st);
+	void* p = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (p == MAP_FAILED) {
+		dprintf(2, "failed to mmap for load_relo_cache");
+		_exit(1);
+	}
+	const ElfW(Ehdr)* ehdr = (const ElfW(Ehdr)*)p;
+    const ElfW(Shdr)* shdrs = (const ElfW(Shdr)*)((const char*)ehdr + ehdr->e_shoff);
+    const char *strings = (const char*)ehdr + shdrs[ehdr->e_shstrndx].sh_offset;
+
+    for (int i = 0; i < ehdr->e_shnum; i++) {
+        if (strcmp(strings + shdrs[i].sh_name, ".reloc.cache") == 0) {
+            size_t section_size = shdrs[i].sh_size;
+            *num_relocs = section_size / sizeof(CachedRelocInfo);
+
+            CachedRelocInfo *reloc_info = (CachedRelocInfo *)((char *)ehdr + shdrs[i].sh_offset);
+            return reloc_info;
+        }
+    }
+
+    *num_relocs = 0;
+    return NULL;
+}
+
+
 static void reloc_all(struct dso *p, CachedRelocInfo * cached_reloc_infos, size_t * reloc_count)
 {
 	size_t dyn[DYN_CNT];
@@ -2040,37 +2096,55 @@ void __dls3(size_t *sp, size_t *auxv)
 		}
 	}
 	static_tls_cnt = tls_cnt;
-
-	size_t num_relocs = total_relocs(&app);
-	debug_print("Total relocations: %zu\n", num_relocs);
-
-	int cache_fd = open("relo.bin", O_CREAT | O_RDWR | O_APPEND | O_TRUNC, S_IRUSR | S_IWUSR);
-	if (cache_fd == -1) {
-		int err = errno;
-		debug_print("Failed to open cache file: %s\n", strerror(err));
-		if (runtime) longjmp(*rtld_fail, 1);
-		return;
-	}
-	
-	size_t file_cache_size = num_relocs * sizeof(CachedRelocInfo);
-	ftruncate(cache_fd, file_cache_size);
-	// To keep track of how many relocations we store
 	size_t reloc_count = 0;
-	CachedRelocInfo *cached_reloc_infos = custom_alloc(cache_fd, file_cache_size);
-	if (num_relocs > 0 && !cached_reloc_infos) {
-		error("Failed to allocate memory for cached relocation infos.\n");
-		if (runtime) longjmp(*rtld_fail, 1);
-		return;
+	size_t num_relocs = 0;
+	CachedRelocInfo *cached_reloc_infos = NULL;
+	int cache_fd = -1;
+	if (is_reloc_write()) {
+		num_relocs = total_relocs(&app);
+		debug_print("Total relocations: %zu\n", num_relocs);
+
+		cache_fd = open("relo.bin", O_CREAT | O_RDWR | O_APPEND | O_TRUNC, S_IRUSR | S_IWUSR);
+		if (cache_fd == -1) {
+			int err = errno;
+			debug_print("Failed to open cache file: %s\n", strerror(err));
+			if (runtime) longjmp(*rtld_fail, 1);
+			return;
+		}
+		
+		size_t file_cache_size = num_relocs * sizeof(CachedRelocInfo);
+		ftruncate(cache_fd, file_cache_size);
+		// To keep track of how many relocations we store
+		cached_reloc_infos = custom_alloc(cache_fd, file_cache_size);
+		if (num_relocs > 0 && !cached_reloc_infos) {
+			error("Failed to allocate memory for cached relocation infos.\n");
+			if (runtime) longjmp(*rtld_fail, 1);
+			return;
+		}
 	}
 
-	/* The main program must be relocated LAST since it may contain
-	 * copy relocations which depend on libraries' relocations. */
-	reloc_all(app.next, cached_reloc_infos, &reloc_count);
-	reloc_all(&app, cached_reloc_infos, &reloc_count);
+	if (is_reloc_read()) {
+		cached_reloc_infos = load_relo_cache(&app, &num_relocs);
+		if (!cached_reloc_infos) {
+			error("Failed to read cached relocation infos.\n");
+			if (runtime) longjmp(*rtld_fail, 1);
+			return;
+		}
+		debug_print("Loaded %zu cached relocations\n", num_relocs);
+		reloc_all(app.next, NULL, &reloc_count);
+		reloc_all(&app, NULL, &reloc_count);
+	} else {
+		/* The main program must be relocated LAST since it may contain
+		* copy relocations which depend on libraries' relocations. */
+		reloc_all(app.next, cached_reloc_infos, &reloc_count);
+		reloc_all(&app, cached_reloc_infos, &reloc_count);
+	}
 
 	// Cleanup
-	munmap(cached_reloc_infos, num_relocs * sizeof(CachedRelocInfo));
-	close(cache_fd);
+	if (is_reloc_write()) {
+		munmap(cached_reloc_infos, num_relocs * sizeof(CachedRelocInfo));
+		close(cache_fd);
+	}
 
 	/* Actual copying to new TLS needs to happen after relocations,
 	 * since the TLS images might have contained relocated addresses. */
