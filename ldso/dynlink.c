@@ -510,7 +510,8 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 		// Skip symbol relocations since we have done it
 		// already
 		if ((dso != &ldso) && sym_index && is_reloc_read()) {
-			debug_print("Skipping a relocation for symbol %s\n", strings + syms[sym_index].st_name);
+			// fzakaria: too verbose
+			// debug_print("Skipping a relocation for symbol %s\n", strings + syms[sym_index].st_name);
 			continue;
 		}
 
@@ -689,7 +690,7 @@ static void do_relr_relocs(struct dso *dso, size_t *relr, size_t relr_size)
 	
 	// Calculate the number of relocations
 	size_t num_relocs = relr_size / sizeof(size_t);
-	printf("Expected number of relr_relocs: %zu\n", num_relocs);
+	debug_print("Expected number of relr_relocs: %zu\n", num_relocs);
 
 	unsigned char *base = dso->base;
 	size_t *reloc_addr;
@@ -1530,7 +1531,8 @@ static void reloc_symbols_from_cache(struct dso *dso, const CachedRelocInfo * ca
 		int type = R_TYPE(cached_reloc_info->type);
 		if (type == REL_NONE) continue;
 
-		debug_print("Relocating symbol from %s in DSO %s\n", cached_reloc_info->symbol_dso_name, cached_reloc_info->dso_name);
+		// fzakaria: too verbose
+		// debug_print("Relocating symbol from %s in DSO %s\n", cached_reloc_info->symbol_dso_name, cached_reloc_info->dso_name);
 		struct dso *reloc_def_dso = find_dso(dso, cached_reloc_info->dso_name);
 		size_t *reloc_addr = laddr(reloc_def_dso, cached_reloc_info->offset);
 		size_t addend = 0; //addend for REL_PLT always 0
