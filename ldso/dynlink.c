@@ -506,6 +506,14 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 		}
 
 		sym_index = R_SYM(rel[1]);
+
+		// Skip symbol relocations since we have done it
+		// already
+		if ((dso != &ldso) && sym_index && is_reloc_read()) {
+			debug_print("Skipping a relocation for symbol %s\n", strings + syms[sym_index].st_name);
+			continue;
+		}
+
 		if (sym_index) {
 			sym = syms + sym_index;
 			name = strings + sym->st_name;
@@ -546,11 +554,12 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 			}
 
 			// Store relocation info
-			if (cached_reloc_infos != NULL) {
+			// Some symbols like _ITM_registerTMCloneTable aren't found since they seem special to GCC
+			if (cached_reloc_infos != NULL && def.sym != NULL) {
 				cached_reloc_infos[*reloc_count].type = R_TYPE(rel[1]);
-				cached_reloc_infos[*reloc_count].st_value = def.sym ? def.sym->st_value : 0;
+				cached_reloc_infos[*reloc_count].st_value = def.sym->st_value;
 				strcpy(cached_reloc_infos[*reloc_count].dso_name, dso->name);
-				strcpy(cached_reloc_infos[*reloc_count].symbol_dso_name, def.dso ? def.dso->name : "");
+				strcpy(cached_reloc_infos[*reloc_count].symbol_dso_name, def.dso->name);
 				cached_reloc_infos[*reloc_count].offset = rel[0];
 				(*reloc_count)++;
 			}
@@ -1500,6 +1509,49 @@ static CachedRelocInfo* load_relo_cache(struct dso *app, size_t *num_relocs) {
     return NULL;
 }
 
+// Find the DSO whose name matches the given argument.
+// The input is the starting DSO and it should use dso->next
+// to traverse the list of DSOs.
+static struct dso *find_dso(struct dso *dso, const char *name) {
+	for (; dso; dso=dso->next) {
+		if (strcmp(dso->name, name) == 0) {
+			return dso;
+		}
+	}
+	debug_print("Could not find DSO with name %s\n", name);
+	return NULL;
+}
+
+static void reloc_symbols_from_cache(struct dso *dso, const CachedRelocInfo * cached_reloc_infos, size_t reloc_count)
+{
+	for (size_t i = 0; i < reloc_count; i++) {
+		const CachedRelocInfo *cached_reloc_info = &cached_reloc_infos[i];
+
+		int type = R_TYPE(cached_reloc_info->type);
+		if (type == REL_NONE) continue;
+
+		debug_print("Relocating symbol from %s in DSO %s\n", cached_reloc_info->symbol_dso_name, cached_reloc_info->dso_name);
+		struct dso *reloc_def_dso = find_dso(dso, cached_reloc_info->dso_name);
+		size_t *reloc_addr = laddr(reloc_def_dso, cached_reloc_info->offset);
+		size_t addend = 0; //addend for REL_PLT always 0
+		struct dso *symbol_def_dso = find_dso(dso, cached_reloc_info->symbol_dso_name);
+		size_t sym_val = (size_t)laddr(symbol_def_dso, cached_reloc_info->st_value);
+
+		switch(type) {
+		case REL_SYMBOLIC:
+		case REL_GOT:
+		case REL_PLT:
+			*reloc_addr = sym_val + addend;
+			break;
+		default:
+			error("Error relocating %s: unsupported relocation type %d",
+				dso->name, type);
+			if (runtime) longjmp(*rtld_fail, 1);
+			continue;
+		}
+	}
+}
+
 
 static void reloc_all(struct dso *p, CachedRelocInfo * cached_reloc_infos, size_t * reloc_count)
 {
@@ -2124,6 +2176,8 @@ void __dls3(size_t *sp, size_t *auxv)
 	}
 
 	if (is_reloc_read()) {
+		// We expect the cache to only be present on the main application
+		// so load it from there
 		cached_reloc_infos = load_relo_cache(&app, &num_relocs);
 		if (!cached_reloc_infos) {
 			error("Failed to read cached relocation infos.\n");
@@ -2131,6 +2185,9 @@ void __dls3(size_t *sp, size_t *auxv)
 			return;
 		}
 		debug_print("Loaded %zu cached relocations\n", num_relocs);
+		reloc_symbols_from_cache(&app, cached_reloc_infos, num_relocs);
+
+		/* Do the remaining relocations */
 		reloc_all(app.next, NULL, &reloc_count);
 		reloc_all(&app, NULL, &reloc_count);
 	} else {
