@@ -9,3 +9,4 @@ lib/musl-gcc.specs
 build/
 .cache/
 .vscode/
+*.bin
