@@ -8,3 +8,4 @@ lib/musl-gcc.specs
 /obj/
 build/
 .cache/
+.vscode/
