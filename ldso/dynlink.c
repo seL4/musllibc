@@ -106,7 +106,7 @@ static inline int is_debug() {
 	if (stage_complete >= 2 && debug_env_exists == -1) {
 		debug_env_exists = getenv("DEBUG") != NULL;
 	}
-	return debug_env_exists;
+	return debug_env_exists == 1;
 
 }
 
@@ -130,7 +130,7 @@ static inline int is_reloc_write() {
 	if (reloc_write_env_exists == -1) {
 		reloc_write_env_exists = getenv("RELOC_WRITE") != NULL;
 	}
-	return reloc_write_env_exists;
+	return reloc_write_env_exists == 1;
 }
 
 static inline int is_reloc_read() {
@@ -138,7 +138,7 @@ static inline int is_reloc_read() {
 	if (reloc_read_env_exists == -1) {
 		reloc_read_env_exists = getenv("RELOC_READ") != NULL;
 	}
-	return reloc_read_env_exists;
+	return reloc_read_env_exists == 1;
 }
 
 struct debug {
