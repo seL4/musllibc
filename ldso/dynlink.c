@@ -97,6 +97,19 @@ typedef struct {
 // Can be used to guard against operations that require
 // libc to be fully relocated which is done after stage2.
 static int stage_complete = 0;
+
+static inline int is_debug() {
+	static volatile int debug_env_exists = -1;
+	// Guard against prior to stage 2 since
+	// getenv is not available before stage 2
+	// as libc itself needs to be relocated
+	if (stage_complete >= 2 && debug_env_exists == -1) {
+		debug_env_exists = getenv("DEBUG") != NULL;
+	}
+	return debug_env_exists;
+
+}
+
 /**
  * Prints debug messages to stderr if the DEBUG environment
  * variable is set.
@@ -104,14 +117,7 @@ static int stage_complete = 0;
  * to. Message is printed to stderr.
  */
 static inline void debug_print(const char *format, ...) {
-    static volatile int debug_env_exists = -1;
-	// Guard against prior to stage 2 since
-	// getenv is not available before stage 2
-	// as libc itself needs to be relocated
-    if (stage_complete >= 2 && debug_env_exists == -1) {
-        debug_env_exists = getenv("DEBUG") != NULL;
-    }
-    if (debug_env_exists == 1) {
+    if (is_debug()) {
         va_list args;
         va_start(args, format);
         vdprintf(2, format, args);
@@ -465,7 +471,7 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 
 	// fzakaria: If we are doing relocs for libc
 	// We can't even call this function!
-	if (dso != &ldso) {
+	if (dso != &ldso && is_debug()) {
 		start_time = clock();
 	}
 
@@ -522,7 +528,7 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 			
 			// fzakaria: If we are doing relocs for libc
 			// We can't even call this function!
-			if (dso != &ldso) {
+			if (dso != &ldso && is_debug()) {
 				find_sym_start = clock();
 			}
 
@@ -532,7 +538,7 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 				? (struct symdef){ .dso = dso, .sym = sym }
 				: find_sym(ctx, name, type==REL_PLT);
 
-			if (dso != &ldso) {
+			if (dso != &ldso && is_debug()) {
 				find_sym_end = clock();
 				find_sym_elapsed = (double)(find_sym_end - find_sym_start) / CLOCKS_PER_SEC;
 				find_sym_total_time += find_sym_elapsed;  // Accumulate time spent in find_sym
@@ -676,7 +682,7 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 		}
 	}
 
-	if (dso != &ldso) {
+	if (dso != &ldso && is_debug()) {
 		end_time = clock();
     	elapsed_time = (double)(end_time - start_time) / CLOCKS_PER_SEC;
     	debug_print("do_relocs execution time: %lf seconds\n", elapsed_time);
