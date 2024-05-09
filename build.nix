@@ -32,7 +32,7 @@ in with pkgs.pkgsMusl.stdenv; rec {
 
     enableParallelBuilding = true;
     dontStrip = true;
-    NIX_CFLAGS_COMPILE = "-g";
+    NIX_CFLAGS_COMPILE = "-g -O0";
 
     src = fs.toSource {
       root = ./.;
@@ -140,7 +140,7 @@ in with pkgs.pkgsMusl.stdenv; rec {
   };
 
   benchmark = pkgs.writeShellScriptBin "run-benchmark" ''
-    ${pkgs.hyperfine}/bin/hyperfine --warmup 1 --runs 3 \
+    ${pkgs.hyperfine}/bin/hyperfine --warmup 3 --runs 10 \
             'RELOC_READ=1 ${examples.patched_functions}/bin/1000000_functions  &>/dev/null' \
             '${examples.patched_functions}/bin/1000000_functions  &>/dev/null' --export-json benchmark.json
   '';
@@ -160,8 +160,8 @@ in with pkgs.pkgsMusl.stdenv; rec {
       RELOC_READ=1 perf record -F 300 -g -a --user-callchains -- ${examples.patched_functions}/bin/1000000_functions > /dev/null
       perf script > out.perf
       ${pkgs.flamegraph}/bin/stackcollapse-perf.pl out.perf > out.perf-folded
-      grep _dlstart_c out.perf-folded > _dlstart_c-out.perf-folded
-      ${pkgs.flamegraph}/bin/flamegraph.pl --title ' ' _dlstart_c-out.perf-folded > modified.svg
+      grep _dlstart out.perf-folded > _dlstart-out.perf-folded
+      ${pkgs.flamegraph}/bin/flamegraph.pl --title ' ' _dlstart-out.perf-folded > modified.svg
       echo $(realpath modified.svg)
     '';
 

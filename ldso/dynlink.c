@@ -87,8 +87,10 @@ static void (*error)(const char *, ...) = error_noop;
  */
 typedef struct {
 	int type; 		   	  	  		 // Type of the relocation
-    size_t st_value;      	  		 // Symbol value
-    size_t offset; 		  	  		 // Offset of the relocation
+	size_t st_value;      	  		 // Symbol value
+	size_t offset; 		  	  		 // Offset of the relocation
+	size_t symbol_dso_index;		 // 0-based index starting from the head of the DSO list
+	size_t dso_index;				 // 0-based index starting from the head of the DSO list
 	char symbol_dso_name[255];       // Name of the DSO
 	char dso_name[255];       		 // Name of the DSO
 } CachedRelocInfo;
@@ -445,6 +447,18 @@ void* custom_alloc(int fd, size_t size) {
     return ptr;
 }
 
+/**
+ * Determines the 0-based index of the DSO in the linked list.
+ */
+static size_t determine_dso_index(struct dso *p) {
+	size_t index = 0;
+	while(p->prev != NULL) {
+		index++;
+		p = p->prev;
+	}
+	return index;
+}
+
 static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stride, CachedRelocInfo * cached_reloc_infos, size_t * reloc_count)
 {
 	unsigned char *base = dso->base;
@@ -565,6 +579,8 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 			if (cached_reloc_infos != NULL && def.sym != NULL) {
 				cached_reloc_infos[*reloc_count].type = R_TYPE(rel[1]);
 				cached_reloc_infos[*reloc_count].st_value = def.sym->st_value;
+				cached_reloc_infos[*reloc_count].dso_index = determine_dso_index(dso);
+				cached_reloc_infos[*reloc_count].symbol_dso_index = determine_dso_index(def.dso);
 				strcpy(cached_reloc_infos[*reloc_count].dso_name, dso->name);
 				strcpy(cached_reloc_infos[*reloc_count].symbol_dso_name, def.dso->name);
 				cached_reloc_infos[*reloc_count].offset = rel[0];
@@ -1516,20 +1532,19 @@ static CachedRelocInfo* load_relo_cache(struct dso *app, size_t *num_relocs) {
     return NULL;
 }
 
-// Find the DSO whose name matches the given argument.
+// Find the DSO whose index matches
 // The input is the starting DSO and it should use dso->next
 // to traverse the list of DSOs.
-static struct dso *find_dso(struct dso *dso, const char *name) {
-	for (; dso; dso=dso->next) {
-		if (strcmp(dso->name, name) == 0) {
-			return dso;
-		}
+static struct dso *find_dso(struct dso *app, size_t index) {
+	while (index > 0) {
+		app = app->next;
+		index--;
 	}
-	debug_print("Could not find DSO with name %s\n", name);
-	return NULL;
+
+	return app;
 }
 
-static void reloc_symbols_from_cache(struct dso *dso, const CachedRelocInfo * cached_reloc_infos, size_t reloc_count)
+static void reloc_symbols_from_cache(struct dso *app, const CachedRelocInfo * cached_reloc_infos, size_t reloc_count)
 {
 	for (size_t i = 0; i < reloc_count; i++) {
 		const CachedRelocInfo *cached_reloc_info = &cached_reloc_infos[i];
@@ -1539,10 +1554,10 @@ static void reloc_symbols_from_cache(struct dso *dso, const CachedRelocInfo * ca
 
 		// fzakaria: too verbose
 		// debug_print("Relocating symbol from %s in DSO %s\n", cached_reloc_info->symbol_dso_name, cached_reloc_info->dso_name);
-		struct dso *reloc_def_dso = find_dso(dso, cached_reloc_info->dso_name);
+		struct dso *reloc_def_dso = find_dso(app, cached_reloc_info->dso_index);
 		size_t *reloc_addr = laddr(reloc_def_dso, cached_reloc_info->offset);
 		size_t addend = 0; //addend for REL_PLT always 0
-		struct dso *symbol_def_dso = find_dso(dso, cached_reloc_info->symbol_dso_name);
+		struct dso *symbol_def_dso = find_dso(app, cached_reloc_info->symbol_dso_index);
 		size_t sym_val = (size_t)laddr(symbol_def_dso, cached_reloc_info->st_value);
 
 		switch(type) {
@@ -1553,7 +1568,7 @@ static void reloc_symbols_from_cache(struct dso *dso, const CachedRelocInfo * ca
 			break;
 		default:
 			error("Error relocating %s: unsupported relocation type %d",
-				dso->name, type);
+				app->name, type);
 			if (runtime) longjmp(*rtld_fail, 1);
 			continue;
 		}
