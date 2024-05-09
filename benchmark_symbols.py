@@ -1,6 +1,5 @@
 #! /usr/bin/env python3
 import pprint
-import sqlite3
 import subprocess
 import tempfile
 import timeit
