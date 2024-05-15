@@ -10,13 +10,15 @@ namespace fs = std::filesystem;
 
 // This should be in sync with what's in dynlink.c
 typedef struct {
-  int type;         // Type of the relocation
-  size_t st_value;  // Symbol value
-  size_t offset;    // Offset of the relocation
-  size_t symbol_dso_index;
-  size_t dso_index;  // 0-based index starting from the head of the DSO list
-  char symbol_dso_name[255];  // Name of the DSO
-  char dso_name[255];         // Name of the DSO
+	int type; 		   	  	  		 // Type of the relocation
+	size_t addend; 		  	  		 // Addend of the relocation
+	size_t st_value;      	  		 // Symbol value
+	size_t st_size;					 // Symbol size
+	size_t offset; 		  	  		 // Offset of the relocation
+	size_t symbol_dso_index;		 // 0-based index starting from the head of the DSO list
+	size_t dso_index;				 // 0-based index starting from the head of the DSO list
+	char symbol_dso_name[255];       // Name of the DSO
+	char dso_name[255];       		 // Name of the DSO
 } CachedRelocInfo;
 
 std::vector<CachedRelocInfo> read_cached_relocs(const std::string& filename) {
@@ -43,6 +45,7 @@ std::vector<CachedRelocInfo> read_cached_relocs(const std::string& filename) {
 
 void print_reloc_info(const CachedRelocInfo& reloc) {
   std::cout << "Type: " << reloc.type << ", "
+            << "Symbol Size: " << reloc.st_size << ", "
             << "Symbol Value: " << reloc.st_value << ", "
             << "Symbol DSO Index: " << reloc.symbol_dso_index << ", "
             << "Symbol DSO Name: " << reloc.symbol_dso_name << ", "

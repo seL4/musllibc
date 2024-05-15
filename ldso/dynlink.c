@@ -89,6 +89,7 @@ typedef struct {
 	int type; 		   	  	  		 // Type of the relocation
 	size_t addend; 		  	  		 // Addend of the relocation
 	size_t st_value;      	  		 // Symbol value
+	size_t st_size;					 // Symbol size
 	size_t offset; 		  	  		 // Offset of the relocation
 	size_t symbol_dso_index;		 // 0-based index starting from the head of the DSO list
 	size_t dso_index;				 // 0-based index starting from the head of the DSO list
@@ -581,6 +582,7 @@ static void do_relocs(struct dso *dso, size_t *rel, size_t rel_size, size_t stri
 				cached_reloc_infos[*reloc_count].type = R_TYPE(rel[1]);
 				cached_reloc_infos[*reloc_count].addend = addend;
 				cached_reloc_infos[*reloc_count].st_value = def.sym->st_value;
+				cached_reloc_infos[*reloc_count].st_size = def.sym->st_size;
 				cached_reloc_infos[*reloc_count].dso_index = determine_dso_index(dso);
 				cached_reloc_infos[*reloc_count].symbol_dso_index = determine_dso_index(def.dso);
 				strcpy(cached_reloc_infos[*reloc_count].dso_name, dso->name);
@@ -1567,6 +1569,9 @@ static void reloc_symbols_from_cache(struct dso *app, const CachedRelocInfo * ca
 		case REL_GOT:
 		case REL_PLT:
 			*reloc_addr = sym_val + addend;
+			break;
+		case REL_COPY:
+			memcpy(reloc_addr, (void *)sym_val, cached_reloc_info->st_size);
 			break;
 		case REL_DTPMOD:
 			*reloc_addr = symbol_def_dso->tls_id;

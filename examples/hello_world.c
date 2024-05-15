@@ -3,12 +3,17 @@
 
 extern void foo();
 
+extern int global_variable;
+
+int local_copy;
+
 void my_function() {
     printf("This is my_function.\n");
 }
 
 int main() {
-    printf("Hello, World!\n");
+    local_copy = global_variable;
+    printf("Hello, World: %d!\n", local_copy);
     foo();
 
     Dl_info info;
