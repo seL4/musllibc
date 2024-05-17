@@ -145,10 +145,10 @@ in with pkgs.pkgsMusl.stdenv; rec {
         executable = ruby;
       };
 
-      patched_clang = patchExecutable {
+      patched_clang = pkgs.pkgsMusl.wrapCC (patchExecutable {
         name = "clang";
         executable = pkgs.pkgsMusl.llvmPackages.clang.cc;
-      };
+      });
 
       patched_python = patchExecutable {
         name = "python3";
