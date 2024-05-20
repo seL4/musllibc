@@ -81,6 +81,79 @@ in with pkgs.pkgsMusl.stdenv; rec {
           '';
         };
     in rec {
+      raw_functions_and_libraries = mkDerivation rec {
+        name = "raw_functions_and_libraries";
+        # the musl.dev variant is important to provide musl-gcc
+        nativeBuildInputs = [ pkgs.python3 pkgs.musl.dev ];
+        src = fs.toSource {
+          root = ./.;
+          fileset = fs.unions [
+            ./examples/benchmark-many-files-dynamic/Makefile
+            ./examples/benchmark-many-files-dynamic/generate_sources.py
+          ];
+        };
+        dontStrip = true;
+        enableParallelBuilding = true;
+        NIX_CFLAGS_COMPILE = "-g -O0";
+        buildPhase = ''
+          # Function to generate the shared objects and executable
+          generate_files() {
+              local num_functions=$1
+              local num_shared_objects=$2
+              local total_symbols=$((num_functions * num_shared_objects))
+              echo "Generating for $total_symbols symbols: $num_functions functions per shared object, $num_shared_objects shared objects"
+
+              mkdir build_''${num_functions}_''${num_shared_objects}
+              pushd build_''${num_functions}_''${num_shared_objects}
+              ${pkgs.python3}/bin/python3 $src/examples/benchmark-many-files-dynamic/generate_sources.py $num_functions $num_shared_objects
+
+              echo "Building with ''${NIX_BUILD_CORES} cores"
+              make -f $src/examples/benchmark-many-files-dynamic/Makefile -j''${NIX_BUILD_CORES}
+              # Rename the benchmark executable
+              mv benchmark benchmark_''${num_functions}_''${num_shared_objects}
+              popd
+          }
+
+          for num_functions in 1 10 100 1000; do
+            for num_shared_objects in 1 10 100 1000; do
+                generate_files $num_functions $num_shared_objects
+            done
+          done
+        '';
+
+        installPhase = ''
+          mkdir -p $out/bin
+          mkdir -p $out/lib
+
+          mv build_*/*.so $out/lib
+          mv build_*/benchmark_*_* $out/bin
+        '';
+      };
+
+      patched_functions_and_libraries = mkDerivation {
+        name = "patched_functions_and_libraries";
+
+        buildInputs = [ raw_functions_and_libraries pkgs.patchelf musl ];
+
+        phases = "installPhase";
+
+        installPhase = ''
+          mkdir -p $out/bin
+
+          # Apply patchelf to all binaries in the bin directory to set the new interpreter.
+          for bin in ${raw_functions_and_libraries}/bin/*; do
+              patchelf --set-interpreter ${musl}/lib/libc.so $bin --output $out/bin/$(basename $bin)
+          done
+
+          # Add the custom relocation section
+          for bin in $out/bin/*; do
+            RELOC_WRITE=1 $bin &>/dev/null
+            objcopy --add-section .reloc.cache=relo.bin \
+                    --set-section-flags .reloc.cache=noload,readonly $bin
+          done
+        '';
+      };
+
       # we create the raw_functions separate to avoid recreating them when
       # our musl code changes. Therefore we create a wrapped attribute that
       # sets the interpreter. Technically the libc are not the same but
@@ -94,8 +167,25 @@ in with pkgs.pkgsMusl.stdenv; rec {
         dontStrip = true;
         NIX_CFLAGS_COMPILE = "-g -O0";
         buildPhase = ''
-          for ((i=1; i<=1000000; i*=10)); do
-            ${pkgs.python3}/bin/python3 ${src} $i
+          # Function to generate the shared objects and executable
+          generate_files() {
+              local num_functions=$1
+              local num_shared_objects=$2
+              local total_symbols=$((num_functions * num_shared_objects))
+
+              echo "Generating for $total_symbols symbols: $num_functions functions per shared object, $num_shared_objects shared objects"
+              ${pkgs.python3}/bin/python3 ${src} $num_functions $num_shared_objects
+          }
+
+          # Iterate over powers of 10 up to 1 million
+          for total_symbols in 10 100 1000 10000 100000 1000000; do
+            echo "Processing total_symbols = $total_symbols"
+            for num_shared_objects in 1 10 100 1000 10000; do
+                if ((num_shared_objects <= total_symbols && total_symbols % num_shared_objects == 0)); then
+                    num_functions=$((total_symbols / num_shared_objects))
+                    generate_files $num_functions $num_shared_objects
+                fi
+            done
           done
         '';
 
@@ -191,11 +281,59 @@ in with pkgs.pkgsMusl.stdenv; rec {
       };
     };
 
-  benchmark = pkgs.writeShellScriptBin "run-benchmark" ''
-    ${pkgs.hyperfine}/bin/hyperfine --warmup 3 --runs 10 \
-            'RELOC_READ=1 ${examples.patched_functions}/bin/1000000_functions  &>/dev/null' \
-            '${examples.patched_functions}/bin/1000000_functions  &>/dev/null' --export-json benchmark.json
-  '';
+  benchmarks = {
+    benchmark-1000000_functions =
+      pkgs.writeShellScriptBin "run-1000000_functions-benchmark" ''
+        ${pkgs.hyperfine}/bin/hyperfine --warmup 3 --runs 10 \
+                'RELOC_READ=1 ${examples.patched_functions}/bin/1000000_functions  &>/dev/null' \
+                '${examples.patched_functions}/bin/1000000_functions  &>/dev/null' --export-json benchmark.json
+      '';
+    benchark-multiple-functions-per-shared-object = pkgs.writeShellScriptBin
+      "run-multiple-functions-per-shared-object-benchmark" ''
+        # Output file for CSV results
+        results_file="benchmark_results.csv"
+        echo "binary,baseline_time,reloc_read_time,median_speedup" > $results_file
+
+        # Function to run benchmarks and collect data
+        run_benchmark() {
+            local binary=$1
+            local results_file=$2
+
+            echo "Benchmarking $binary"
+
+            if [[ "$binary" == *"benchmark_1000_1000"* ]]; then
+                # Configuration for benchmark_1000_1000
+                # it takes so long so run it a few less times
+                runs=3
+                warmup=1
+            else
+                # Default configuration
+                runs=100
+                warmup=3
+            fi
+
+            ${pkgs.hyperfine}/bin/hyperfine --warmup $warmup --runs $runs \
+                  --export-json baseline.json $binary --shell=none --output null
+            RELOC_READ=1 ${pkgs.hyperfine}/bin/hyperfine --warmup $warmup --runs $runs \
+                  --export-json reloc_read.json $binary --shell=none --output null
+
+            baseline_mean=$(jq '.results[0].mean' baseline.json)
+            reloc_read_mean=$(jq '.results[0].mean' reloc_read.json)
+            speedup=$(echo "scale=4; $baseline_mean / $reloc_read_mean" | bc)
+
+            echo "$(basename $binary),$baseline_mean,$reloc_read_mean,$speedup" >> $results_file
+
+            rm baseline.json reloc_read.json
+        }
+
+        # Run benchmarks for each binary
+        for binary in ${examples.patched_functions_and_libraries}/bin/benchmark_*_*; do
+            run_benchmark $binary $results_file
+        done
+
+        echo "Benchmarking completed. Results saved to $results_file."
+      '';
+  };
 
   flamegraphs = {
 
