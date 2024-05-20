@@ -234,4 +234,7 @@ clean:
 distclean: clean
 	rm -f config.mak
 
-.PHONY: all clean install install-libs install-headers install-tools
+fmt:
+	find . -name "*.nix" | xargs nixfmt
+
+.PHONY: all clean install install-libs install-headers install-tools fmt
