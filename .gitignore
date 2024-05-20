@@ -10,4 +10,3 @@ build/
 .cache/
 .vscode/
 *.bin
-examples/read_relo_cache
