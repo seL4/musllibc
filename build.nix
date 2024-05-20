@@ -34,20 +34,22 @@ let
       hello_world = callPackage ./examples/hello-world { };
     } // callPackage ./examples { };
   };
-
-  # Super important to use pkgsMusl so that the GCC flags that get passed
-  # are correct so that the right libc & dynamic linker are used
-in with pkgs.pkgsMusl.stdenv; rec {
-
-  inherit packages;
-
   benchmarks = {
     benchmark-1000000_functions =
       pkgs.writeShellScriptBin "run-1000000_functions-benchmark" ''
         ${pkgs.hyperfine}/bin/hyperfine --warmup 3 --runs 10 \
-                'RELOC_READ=1 ${examples.patched_functions}/bin/1000000_functions  &>/dev/null' \
-                '${examples.patched_functions}/bin/1000000_functions  &>/dev/null' --export-json benchmark.json
+                'RELOC_READ=1 ${packages.examples.patched_functions}/bin/1000000_functions  &>/dev/null' \
+                '${packages.examples.patched_functions}/bin/1000000_functions  &>/dev/null' --export-json benchmark.json
       '';
+  };
+  # Super important to use pkgsMusl so that the GCC flags that get passed
+  # are correct so that the right libc & dynamic linker are used
+in with pkgs.pkgsMusl.stdenv; {
+
+  inherit packages;
+
+  benchmarks = benchmarks // {
+    
     benchark-multiple-functions-per-shared-object = pkgs.writeShellScriptBin
       "run-multiple-functions-per-shared-object-benchmark" ''
         # Output file for CSV results
