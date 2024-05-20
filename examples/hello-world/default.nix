@@ -36,4 +36,4 @@ let
     '';
   };
 
-in patchExecutable { executable = hello_world; }
+in patchExecutable.individual { executable = hello_world; }
