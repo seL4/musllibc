@@ -12,5 +12,6 @@
   patched_clang =
     wrapCC (patchExecutable.individual { executable = llvmPackages.clang.cc; });
 
-  patched_python = patchExecutable.individual { executable = enableDebugging python3; };
+  patched_python =
+    patchExecutable.individual { executable = enableDebugging python3; };
 }
