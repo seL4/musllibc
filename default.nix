@@ -9,10 +9,12 @@ let
 
           })
       ];
+      # pynamic uses python2
+      config.permittedInsecurePackages = [ "python-2.7.18.7" ];
     };
   # taken from https://nix.dev/tutorials/callpackage
   callPackage = pkgs.lib.callPackageWith (pkgs.pkgsMusl // packages);
-  packages = rec {
+  packages = pkgs.lib.recurseIntoAttrs rec {
     patchExecutable = callPackage ./patch_executable.nix { };
     musl = callPackage ./musl.nix { };
     read_relo_cache = callPackage ./examples/read_relo_cache { };
@@ -32,7 +34,13 @@ let
         command = "&>/dev/null";
       };
       hello_world = callPackage ./examples/hello-world { };
-    } // callPackage ./examples { };
+    } // callPackage ./examples {
+      fetchFromGitHub = pkgs.fetchFromGitHub;
+      openmpi = pkgs.pkgsMusl.openmpi.override {
+        fabricSupport = false;
+        fortranSupport = false;
+      };
+    };
   };
   # We actually use pkgs.callPackage here because we don't necessarily
   # need the musl package set so this avoids a lot of rebuilds.
@@ -42,4 +50,7 @@ let
     pkgs.callPackage ./flamegraphs.nix { examples = packages.examples; };
   # Super important to use pkgsMusl so that the GCC flags that get passed
   # are correct so that the right libc & dynamic linker are used
-in { inherit packages benchmarks flamegraphs; }
+  # recurseIntoAttrs makes nix-build build everything
+  # must be set on each attrset
+  # https://discourse.nixos.org/t/nix-build-a-set-of-sets-of-derivations/11291/2
+in pkgs.lib.recurseIntoAttrs { inherit packages benchmarks flamegraphs; }

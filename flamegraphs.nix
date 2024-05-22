@@ -1,4 +1,4 @@
-{ writeShellScriptBin, flamegraph, examples }: {
+{ writeShellScriptBin, flamegraph, examples, lib }: lib.recurseIntoAttrs {
 
   baseline = writeShellScriptBin "create-flamegraph" ''
     perf record -F 300 -g -a --user-callchains -- ${examples.patched_functions}/bin/1000000_functions > /dev/null
