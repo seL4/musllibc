@@ -1,4 +1,5 @@
-{ writeShellScriptBin, hyperfine, examples, lib }: lib.recurseIntoAttrs {
+{ writeShellScriptBin, hyperfine, examples, lib }:
+lib.recurseIntoAttrs {
   benchmark-1000000_functions =
     writeShellScriptBin "run-1000000_functions-benchmark" ''
       ${hyperfine}/bin/hyperfine --warmup 3 --runs 10 \
