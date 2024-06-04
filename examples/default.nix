@@ -1,6 +1,6 @@
-{ libffi, ruby, patchExecutable, wrapCC, llvmPackages, enableDebugging, python3
+{ openssh, musl, patchelf, libffi, ruby, patchExecutable, wrapCC, llvmPackages, enableDebugging, python3
 , stdenv, fetchFromGitHub, python2, openmpi, makeWrapper, lib }:
-lib.recurseIntoAttrs {
+lib.recurseIntoAttrs rec {
   patched_ruby = let
     # for some reason on pkgMusl this is hanging?...
     # just disable it for now
@@ -55,6 +55,25 @@ lib.recurseIntoAttrs {
       makeWrapper $out/bin/pynamic-bigexe-pyMPI $out/bin/pynamic-bigexe \
                     --set PYTHONPATH "$out/lib" \
                     --add-flags $out/bin/pynamic_driver.py
+    '';
+
+  };
+
+  patched_pynamic = stdenv.mkDerivation {
+    name = "patched_pynamic";
+    phases = "installPhase";
+    buildInputs = [ patchelf musl pynamic makeWrapper openssh];
+    installPhase = ''
+        mkdir -p $out/bin
+        patchelf --set-interpreter ${musl}/lib/libc.so ${pynamic}/bin/pynamic-bigexe-pyMPI --output $out/bin/pynamic-bigexe-pyMPI
+        RELOC_WRITE=1 $out/bin/pynamic-bigexe-pyMPI -v
+        cp relo.bin $out/bin/pynamic-bigexe-pyMPI.relo
+        objcopy --add-section .reloc.cache=relo.bin \
+                --set-section-flags .reloc.cache=noload,readonly $out/bin/pynamic-bigexe-pyMPI
+        
+        makeWrapper $out/bin/pynamic-bigexe-pyMPI $out/bin/pynamic-bigexe \
+                    --set PYTHONPATH "${pynamic}/lib" \
+                    --add-flags ${pynamic}/bin/pynamic_driver.py
     '';
   };
 }

@@ -36,6 +36,7 @@ let
       };
       hello_world = callPackage ./examples/hello-world { };
     } // callPackage ./examples {
+      musl = musl;
       fetchFromGitHub = pkgs.fetchFromGitHub;
       openmpi = (pkgs.pkgsMusl.openmpi.override {
         fabricSupport = false;
