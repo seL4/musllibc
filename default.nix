@@ -8,9 +8,8 @@ let
           {
 
           })
+        (import ./overlay.nix)  
       ];
-      # pynamic uses python2
-      config.permittedInsecurePackages = [ "python-2.7.18.7" ];
     };
   lib = pkgs.lib;
   # taken from https://nix.dev/tutorials/callpackage
@@ -38,20 +37,6 @@ let
     } // callPackage ./examples {
       musl = musl;
       fetchFromGitHub = pkgs.fetchFromGitHub;
-      openmpi = (pkgs.pkgsMusl.openmpi.override {
-        fabricSupport = false;
-        fortranSupport = false;
-        cudaSupport = false;
-        enableSGE = false;
-      }).overrideAttrs (finalAttrs: previousAttrs: {
-        enableParallelBuilding = true;
-        buildInputs = with pkgs.pkgsMusl; [ zlib libevent hwloc ];
-        configureFlags = [
-          "--disable-mpi-fortran"
-          "--disable-static"
-          "--enable-mpi1-compatibility"
-        ];
-      });
     };
   };
   # We actually use pkgs.callPackage here because we don't necessarily

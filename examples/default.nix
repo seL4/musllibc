@@ -1,5 +1,5 @@
 { openssh, musl, patchelf, libffi, ruby, patchExecutable, wrapCC, llvmPackages, enableDebugging, python3
-, stdenv, fetchFromGitHub, python2, openmpi, makeWrapper, lib }:
+, stdenv, fetchFromGitHub, openmpi, makeWrapper, lib }:
 lib.recurseIntoAttrs rec {
   patched_ruby = let
     # for some reason on pkgMusl this is hanging?...
@@ -25,11 +25,11 @@ lib.recurseIntoAttrs rec {
       hash = "sha256-5npWRktvH4luT4qw6z0BJr/twQLu+2HvJ4g8cai11LA=";
     };
     sourceRoot = "${src.name}/pynamic-pyMPI-2.6a1";
-    buildInputs = [ python2 openmpi makeWrapper ];
+    buildInputs = [ (python3.withPackages(ps: [ ps.mpi4py ]))  openmpi makeWrapper ];
 
-    configurePhase = "";
-
-    postPatch = "";
+    configurePhase = ''
+      # do nothing
+    '';
 
     buildPhase = ''
       # https://asc.llnl.gov/sites/asc/files/2020-09/pynamic-coral-2-benchmark-summary-v1-2.pdf
@@ -39,22 +39,19 @@ lib.recurseIntoAttrs rec {
       # -u <num_utility_mods> <avg_num_u_functions>
       # -n: add N characters to the function name
       # -b : generate the pynamic-bigexe-pyMPI
-      python config_pynamic.py 900 1250 -e -u 350 1250 \
-                            -n 150 -b -j $NIX_BUILD_CORES
+      # python config_pynamic.py 900 1250 -e -u 350 1250 \
+      #                      -n 150 -b -j $NIX_BUILD_CORES
+      python3 config_pynamic.py 4 4 -e -u 2 2 -n 3 -j $NIX_BUILD_CORES --with-mpi4py
     '';
 
     installPhase = ''
       mkdir -p $out/bin
       mkdir -p $out/lib
 
-      mv pynamic-bigexe-pyMPI  $out/bin
-      mv pynamic_driver.py $out/bin
+      mv pynamic-mpi4py $out/bin
+      mv pynamic_driver_mpi4py.py $out/bin
 
       mv *.so $out/lib
-
-      makeWrapper $out/bin/pynamic-bigexe-pyMPI $out/bin/pynamic-bigexe \
-                    --set PYTHONPATH "$out/lib" \
-                    --add-flags $out/bin/pynamic_driver.py
     '';
 
   };
@@ -65,15 +62,14 @@ lib.recurseIntoAttrs rec {
     buildInputs = [ patchelf musl pynamic makeWrapper openssh];
     installPhase = ''
         mkdir -p $out/bin
-        patchelf --set-interpreter ${musl}/lib/libc.so ${pynamic}/bin/pynamic-bigexe-pyMPI --output $out/bin/pynamic-bigexe-pyMPI
-        RELOC_WRITE=1 $out/bin/pynamic-bigexe-pyMPI -v
-        cp relo.bin $out/bin/pynamic-bigexe-pyMPI.relo
+        patchelf --set-interpreter ${musl}/lib/libc.so ${pynamic}/bin/pynamic-mpi4py --output $out/bin/pynamic-mpi4py
+        PYTHONPATH="${pynamic}/lib:${pynamic}/bin" RELOC_WRITE=1 $out/bin/pynamic-mpi4py -v
+        cp relo.bin $out/bin/pynamic-mpi4py.relo
         objcopy --add-section .reloc.cache=relo.bin \
-                --set-section-flags .reloc.cache=noload,readonly $out/bin/pynamic-bigexe-pyMPI
+                --set-section-flags .reloc.cache=noload,readonly $out/bin/pynamic-mpi4py
         
-        makeWrapper $out/bin/pynamic-bigexe-pyMPI $out/bin/pynamic-bigexe \
-                    --set PYTHONPATH "${pynamic}/lib" \
-                    --add-flags ${pynamic}/bin/pynamic_driver.py
+        makeWrapper $out/bin/pynamic-mpi4py $out/bin/pynamic-mpi4py-wrapped \
+                    --set PYTHONPATH "${pynamic}/lib:${pynamic}/bin"
     '';
   };
 }
