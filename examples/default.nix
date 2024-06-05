@@ -39,9 +39,10 @@ lib.recurseIntoAttrs rec {
       # -u <num_utility_mods> <avg_num_u_functions>
       # -n: add N characters to the function name
       # -b : generate the pynamic-bigexe-pyMPI
-      # python config_pynamic.py 900 1250 -e -u 350 1250 \
-      #                      -n 150 -b -j $NIX_BUILD_CORES
-      python3 config_pynamic.py 4 4 -e -u 2 2 -n 3 -j $NIX_BUILD_CORES --with-mpi4py
+       python config_pynamic.py 900 1250 -e -u 350 1250 \
+                            -n 150 -j $NIX_BUILD_CORES --with-mpi4py
+      # This is used for testing
+      # python3 config_pynamic.py 4 4 -e -u 2 2 -n 3 -j $NIX_BUILD_CORES --with-mpi4py
     '';
 
     installPhase = ''
