@@ -1536,20 +1536,35 @@ static CachedRelocInfo* load_relo_cache(struct dso *app, size_t *num_relocs) {
     return NULL;
 }
 
-// Find the DSO whose index matches
-// The input is the starting DSO and it should use dso->next
-// to traverse the list of DSOs.
-static struct dso *find_dso(struct dso *app, size_t index) {
-	while (index > 0) {
-		app = app->next;
-		index--;
-	}
-
-	return app;
+/**
+ * Read the app DSO linked list into an array for O(1) access in
+ * reloc_symbols_from_cache's loop
+ */
+static struct dso **
+make_dso_table(struct dso *app)
+{
+    struct dso **dso_table;
+    size_t count = 0;
+    size_t cached_reloc_size = 1024;
+    dso_table = calloc(cached_reloc_size, sizeof(struct dso *));
+    while (app) {
+        if (count > (cached_reloc_size / 2)) {
+            debug_print("resizing dso_table from %zd to %zd\n", cached_reloc_size, cached_reloc_size * 2);
+            cached_reloc_size *= 2;
+            dso_table = realloc(dso_table, cached_reloc_size * sizeof(struct dso *));
+        }
+        dso_table[count++] = app;
+        app = app->next;
+    }
+    dso_table = realloc(dso_table, count * sizeof(struct dso *));
+    debug_print("done initializing dso_table; total size = %zd\n", count);
+    return dso_table;
 }
 
 static void reloc_symbols_from_cache(struct dso *app, const CachedRelocInfo * cached_reloc_infos, size_t reloc_count)
 {
+    struct dso **dso_table = make_dso_table(app);
+    debug_print("relocating %zu symbols...\n", reloc_count);
 	for (size_t i = 0; i < reloc_count; i++) {
 		const CachedRelocInfo *cached_reloc_info = &cached_reloc_infos[i];
 
@@ -1558,10 +1573,10 @@ static void reloc_symbols_from_cache(struct dso *app, const CachedRelocInfo * ca
 
 		// fzakaria: too verbose
 		// debug_print("Relocating symbol from %s in DSO %s\n", cached_reloc_info->symbol_dso_name, cached_reloc_info->dso_name);
-		struct dso *reloc_def_dso = find_dso(app, cached_reloc_info->dso_index);
+		struct dso *reloc_def_dso = dso_table[cached_reloc_info->dso_index];
 		size_t *reloc_addr = laddr(reloc_def_dso, cached_reloc_info->offset);
 		size_t addend = cached_reloc_info->addend;
-		struct dso *symbol_def_dso = find_dso(app, cached_reloc_info->symbol_dso_index);
+		struct dso *symbol_def_dso = dso_table[cached_reloc_info->symbol_dso_index];
 		size_t sym_val = (size_t)laddr(symbol_def_dso, cached_reloc_info->st_value);
 
 		switch(type) {
@@ -1586,6 +1601,7 @@ static void reloc_symbols_from_cache(struct dso *app, const CachedRelocInfo * ca
 			continue;
 		}
 	}
+    free(dso_table);
 }
 
 
