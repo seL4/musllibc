@@ -1540,30 +1540,31 @@ static CachedRelocInfo* load_relo_cache(struct dso *app, size_t *num_relocs) {
  * Read the app DSO linked list into an array for O(1) access in
  * reloc_symbols_from_cache's loop
  */
-static struct dso **
-make_dso_table(struct dso *app)
+static void make_dso_table(struct dso *app, struct dso **dso_table)
 {
-    struct dso **dso_table;
     size_t count = 0;
-    size_t cached_reloc_size = 1024;
-    dso_table = calloc(cached_reloc_size, sizeof(struct dso *));
     while (app) {
-        if (count > (cached_reloc_size / 2)) {
-            debug_print("resizing dso_table from %zd to %zd\n", cached_reloc_size, cached_reloc_size * 2);
-            cached_reloc_size *= 2;
-            dso_table = realloc(dso_table, cached_reloc_size * sizeof(struct dso *));
-        }
         dso_table[count++] = app;
         app = app->next;
     }
-    dso_table = realloc(dso_table, count * sizeof(struct dso *));
-    debug_print("done initializing dso_table; total size = %zd\n", count);
-    return dso_table;
+}
+
+static size_t number_of_dso(struct dso *app)
+{
+	size_t count = 0;
+	while (app) {
+		count++;
+		app = app->next;
+	}
+
+	return count;
 }
 
 static void reloc_symbols_from_cache(struct dso *app, const CachedRelocInfo * cached_reloc_infos, size_t reloc_count)
 {
-    struct dso **dso_table = make_dso_table(app);
+	size_t number_of_dsos = number_of_dso(app);
+    struct dso * dso_table[number_of_dsos];
+	make_dso_table(app, dso_table);
     debug_print("relocating %zu symbols...\n", reloc_count);
 	for (size_t i = 0; i < reloc_count; i++) {
 		const CachedRelocInfo *cached_reloc_info = &cached_reloc_infos[i];

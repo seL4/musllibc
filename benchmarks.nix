@@ -47,6 +47,7 @@ lib.recurseIntoAttrs {
 
       # Run benchmarks for each binary
       for binary in ${examples.patched_functions_and_libraries}/bin/benchmark_*_*; do
+          [[ $binary == *.relo ]] && continue
           run_benchmark $binary $results_file
       done
 
