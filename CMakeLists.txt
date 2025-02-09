@@ -24,8 +24,8 @@ set(
     "aarch32:arm"
     "arm_hyp:arm" # arm_hyp is legacy hack that might get removed one day
     "aarch64" # use KernelSel4Arch
-    "riscv32:riscv" # no difference between 32/64 bit
-    "riscv64:riscv" # no difference between 32/64 bit
+    "riscv32" # use KernelSel4Arch
+    "riscv64" # use KernelSel4Arch
 )
 # Find the tuple with the mapping information. If KernelSel4Arch is not set at
 # all, matching will fail.
@@ -99,6 +99,12 @@ if(CMAKE_C_COMPILER_ID STREQUAL "Clang")
     list(APPEND compile_options "${CMAKE_C_COMPILE_OPTIONS_TARGET}${CMAKE_C_COMPILER_TARGET}")
 endif()
 
+set(MUSL_BUILD_ENV
+    "CC=${CMAKE_C_COMPILER}"
+    "CFLAGS=\"${compile_options}\""
+    "CROSS_COMPILE=${CROSS_COMPILER_PREFIX}"
+    "MAKEFLAGS=\"\$\${MAKEFLAGS:--s}\""
+)
 include(memoize)
 # memoize this installation rule which will save the resulting artifact in a
 # cache and reuse it across builds. This will rebuild from source if the git
@@ -122,26 +128,46 @@ memoize_add_custom_command(
     -p
     build-temp
     COMMAND
-    ${CMAKE_COMMAND}
-    -E
-    env
-    TOOLPREFIX=${CROSS_COMPILER_PREFIX}
-    C_COMPILER=${CMAKE_C_COMPILER}
-    # Suppress make output by default. Verbose output can now be achieved by
-    # "MAKEFLAGS=V3 ninja". "${MAKEFLAGS:--s}" expands to "-s" if MAKEFLAGS is
-    # unset.
-    "MAKEFLAGS=\"\$\${MAKEFLAGS:--s}\""
-    # TODO: should also pass in the cflags for the CMAKE_BUILD_TYPE ?
-    NK_CFLAGS="${compile_options}"
-    TARGET=${muslc_arch}
-    make
-    -C
+    cd
     build-temp
-    ${parallel}
+    COMMAND
+    cp
+    -a
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "src/"
+    COMMAND
+    rm
     -f
-    "${CMAKE_CURRENT_SOURCE_DIR}/Makefile"
-    "STAGE_DIR=${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage"
-    "SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+    src/.git
+    COMMAND
+    # Remove some arch specific assembly functions to fall back to the generic c implementations:
+    rm
+    src/src/thread/i386/__set_thread_area.s # force a call to syscall(SYS_set_thread_area)
+    src/src/thread/x86_64/__set_thread_area.s # force a call to syscall(SYS_set_thread_area)
+    COMMAND
+    "src/configure"
+    "--srcdir=src/"
+    "--prefix=${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage"
+    "--syslibdir=${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage/lib"
+    "--target=${muslc_arch}"
+    # override malloc backend to use the legacy malloc implementation.
+    # we should use ngmalloc, but it requires a more sophisticated mmap
+    # implementation while oldmalloc can work with a dumb arena allocator
+    # that doesn't support freeing (providing no memory allocations larger
+    # than the mmap segment limit are ever freed.)
+    "--with-malloc=oldmalloc"
+    "--disable-shared"
+    ${MUSL_BUILD_ENV}
+    COMMAND
+    make
+    ${parallel}
+    ${MUSL_BUILD_ENV}
+    COMMAND
+    make
+    ${parallel}
+    install-libs install-headers
+    ${MUSL_BUILD_ENV}
+
     DEPENDS
     ${deps}
     COMMAND_EXPAND_LISTS
