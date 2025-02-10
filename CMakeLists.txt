@@ -192,4 +192,4 @@ set_property(
 add_library(muslc INTERFACE)
 add_dependencies(muslc muslc_imported)
 set_property(TARGET muslc PROPERTY INTERFACE_LINK_LIBRARIES muslc_imported)
-target_include_directories(muslc INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage/include")
+target_include_directories(muslc SYSTEM INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage/include")
