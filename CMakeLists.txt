@@ -145,6 +145,11 @@ memoize_add_custom_command(
     src/src/thread/i386/__set_thread_area.s # force a call to syscall(SYS_set_thread_area)
     src/src/thread/x86_64/__set_thread_area.s # force a call to syscall(SYS_set_thread_area)
     COMMAND
+    # Overwrite the syscalls to call a local symbol instead
+    cp
+    ${CMAKE_CURRENT_SOURCE_DIR}/patches/arch/${muslc_arch}/syscall_arch.h
+    src/arch/${muslc_arch}/syscall_arch.h
+    COMMAND
     "src/configure"
     "--srcdir=src/"
     "--prefix=${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage"
