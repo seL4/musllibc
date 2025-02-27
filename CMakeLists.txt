@@ -41,6 +41,19 @@ message(
     STATUS "${PROJECT_NAME} architecture: '${muslc_arch}' (from KernelSel4Arch '${KernelSel4Arch}')"
 )
 
+# Fatal error if wrong ARM tls setting is detected.
+# TODO: It's possible to make some additional patch files to overwrite the parts of muslc that directly access the TLS registers
+# and then these guards could be removed. But most people should be using the right TLS config anyway.
+if (KernelSel4ArchAarch32 AND KernelArmTLSRegTPIDRU)
+    message(FATAL_ERROR
+        "Unsupported thread-local-storage (TLS) settings detected: \
+        KernelSel4Arch is set to aarch32. KernelArmTLSReg is set to tpidru but only tpidruro is supported with this version of musllibc.")
+endif()
+if (KernelSel4ArchAarch64 AND KernelArmTLSRegTPIDRURO)
+    message(FATAL_ERROR
+        "Unsupported thread-local-storage (TLS) settings detected: \
+        KernelSel4Arch is set to aarch64. KernelArmTLSReg is set to tpidruro but only tpidru is supported with this version of musllibc.")
+endif()
 set(
     LIB_MUSLC_GLOB_SOURCES OFF
     CACHE BOOL "This flag causes CMake to add lots of source files to its dependency lists
