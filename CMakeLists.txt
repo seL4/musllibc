@@ -185,7 +185,14 @@ memoize_add_custom_command(
     ${parallel}
     install-libs install-headers
     ${MUSL_BUILD_ENV}
-
+    COMMAND
+    mkdir
+    ${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage/include-internal
+    COMMAND
+    cp
+    ${CMAKE_CURRENT_SOURCE_DIR}/arch/${muslc_arch}/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/arch/generic/*.h
+    ${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage/include-internal
     DEPENDS
     ${deps}
     COMMAND_EXPAND_LISTS
@@ -206,3 +213,7 @@ add_library(muslc INTERFACE)
 add_dependencies(muslc muslc_imported)
 set_property(TARGET muslc PROPERTY INTERFACE_LINK_LIBRARIES muslc_imported)
 target_include_directories(muslc SYSTEM INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage/include")
+
+# Export the internal includes for use in libraries that e.g. implement syscalls
+add_library(muslcinternal INTERFACE)
+target_include_directories(muslcinternal INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage/include-internal")
