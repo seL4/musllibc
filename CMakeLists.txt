@@ -190,8 +190,11 @@ memoize_add_custom_command(
     ${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage/include-internal
     COMMAND
     cp
-    ${CMAKE_CURRENT_SOURCE_DIR}/arch/${muslc_arch}/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/arch/generic/*.h
+    ${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage/include-internal
+    COMMAND
+    cp
+    ${CMAKE_CURRENT_SOURCE_DIR}/arch/${muslc_arch}/*.h
     ${CMAKE_CURRENT_BINARY_DIR}/build-temp/stage/include-internal
     DEPENDS
     ${deps}
